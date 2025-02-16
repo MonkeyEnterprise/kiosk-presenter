@@ -1,0 +1,17 @@
+@reboot sh /scripts/cec.sh on >/dev/null 2>&1                           
+@reboot sh /scripts/sync.sh >/dev/null 2>&1                             #Dropbox synchronisatie                                                 30 * * * * sh /scripts/sync.sh >/dev/null 2>&1
+
+# Bidstonden maandag tot vrijdag                                        0 6 * * 1-5 sh /scripts/cec.sh on >/dev/null 2>&1
+0 9 * * 1-5 sh /scripts/cec.sh standby >/dev/null 2>&1
+
+# Woensdagavond
+30 18 * * 3 sh /scripts/cec.sh on >/dev/null 2>&1
+0 20 * * 3 sh /scripts/cec.sh standby >/dev/null 2>&1
+
+# Zondagochtend
+0 9 * * 7 sh /scripts/cec.sh on >/dev/null 2>&1
+30 13 * * 7 sh /scripts/cec.sh standby >/dev/null 2>&1
+
+# Zondagavond
+0 17 * * 7 sh /scripts/cec.sh on >/dev/null 2>&1
+30 19 * * 7 sh /scripts/cec.sh standby >/dev/null 2>&1
