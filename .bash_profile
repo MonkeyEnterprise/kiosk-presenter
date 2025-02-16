@@ -1,1 +1,1 @@
- [[ -z $DSIPLAY && $XDG_VTNR -eq 1 ]]  && startx -- -nocursor
+[[ -z $DSIPLAY && $XDG_VTNR -eq 1 ]]  && startx -- -nocursor
