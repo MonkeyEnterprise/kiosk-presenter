@@ -1,0 +1,3 @@
+/etc/xdg/openbox/autostart                     xset -display :0 s noblank              # Screen Saver: prefer blanking>xset -display :0 s off                  # DPMS (Energy Star):   Standby>xset -display :0 -dpms                  # DPMS (Energy Star):   DPMS is>xset -display :0 s 0 0                  # Screen Saver: timeout:  0    >xset -display :0 dpms 0 0 0             # DPMS (Energy Star):   DPMS is>
+xset -display :0 dpms force off # Now screen saver is on, but screen is>xset -display :0 dpms force on  # Now screen saver is off, i.e. back to>
+feh -recursive -Y -x -q -D 30 -B black -F -Z /media/
