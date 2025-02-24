@@ -1,183 +1,112 @@
 
-# **Installation Guide for Minimal FEH Setup with Rclone and CEC-Utils**
+# **Program Overview and Setup Script Explanation**
 
-## 1. Install Necessary Packages
+## **Program Description**
 
-First, update your system and install all the required packages:
+This program is designed to create a minimal digital signage solution using a Raspberry Pi or Linux-based system. The setup focuses on displaying a fullscreen slideshow of images using `feh`, synchronized from a remote storage service through `rclone`. Additionally, the system utilizes HDMI-CEC commands via `cec-utils` to manage display power states automatically.
 
-```sh
-sudo apt update
-sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils inotify-tools
-```
+### **Core Features**
 
----
-
-## 2. Set Up Directory Structure
-
-Create the required directories for configuration and media:
-
-```sh
-mkdir -p ~/.config/openbox
-mkdir -p ~/media/feh
-```
+- **Fullscreen Slideshow**: Display images in fullscreen mode using `feh`, with automatic detection of new images.
+- **Remote Media Sync**: Automatically synchronize images from remote storage services (Google Drive, Dropbox, etc.) using `rclone`.
+- **HDMI-CEC Power Management**: Automatically power on and off the connected display at scheduled times using `cec-utils`.
+- **Automatic Monitoring**: Continuously monitor the media folder for new files and update the slideshow in real time.
+- **Power Management Scheduling**: Scheduled on/off times for the display using `cron` jobs.
 
 ---
 
-### Edit Your `~/.bash_profile`
+## **Setup Script Explanation (`setup.sh`)**
 
-Configure X to automatically start without a cursor on login:
+The `setup.sh` script is responsible for automating the installation and configuration of all required components. It streamlines the setup process to minimize manual intervention.
 
-```sh
-nano ~/.bash_profile
-```
+### **Main Functions of the Script**
 
-Add the following lines:
+1. **Update and Install Required Packages**
+   - Updates the system and installs essential tools: `xorg`, `x11-xserver-utils`, `feh`, `rclone`, `cec-utils`, and `inotify-tools`.
 
-```bash
-# Start X automatically if not already running
-if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
-  startx -- -nocursor
-fi
-```
+2. **Set Up Directory Structure**
+   - Creates necessary directories:
+     - `~/.config/openbox`: For Openbox configuration (if needed).
+     - `~/media/feh`: Directory for storing synchronized images.
 
-Save and exit by pressing `CTRL+X`, then `Y`, and `Enter`.
+3. **Configure Auto-Start of X Session**
+   - Modifies `~/.bash_profile` to automatically launch X without a cursor on terminal login.
 
----
+4. **Configure Rclone**
+   - Prompts the user to set up `rclone` manually using the `rclone config` command.
 
-## ☁3. Configure Rclone
+5. **Create and Configure `~/.xinitrc`**
+   - Automates the creation of the X session startup file.
+   - Disables screen blanking and power management.
+   - Turns on the HDMI-connected display using CEC.
+   - Synchronizes media using `rclone`.
+   - Starts the FEH slideshow.
+   - Periodically checks for new images from the server every 5 minutes.
 
-Run the following command to configure `rclone`:
+6. **Configure Cron Jobs**
+   - Adds scheduled tasks to automatically power the display on and off based on predefined times.
 
-```sh
-rclone config
-```
-
-Follow the interactive menu to set up your remote storage (Google Drive, Dropbox, etc.). After setup, note the remote name and path for use in your `.xinitrc`.
-
----
-
-## 4. Configure `~/.xinitrc` for FEH Slideshow and CEC Power Management
-
-Create or edit the `~/.xinitrc` file:
-
-```sh
-nano ~/.xinitrc
-```
-
-Add the following configuration:
-
-```bash
-# Disable screen saver and power management
-xset s off
-xset -dpms
-xset s noblank
-
-# Turn on display via HDMI-CEC
-echo "on 0" | cec-client -s -d 1
-
-# Function to start FEH slideshow
-start_feh() {
-  pkill feh  # Stop any running feh instances
-  feh -recursive -Y -x -q -D 30 -B black -F -Z ~/media/feh &
-}
-
-# Function to synchronize media folder using rclone
-sync_media() {
-  echo "$(date): Starting rclone sync" >> ~/feh_sync.log
-  rclone sync remote:path ~/media/feh --delete-during
-}
-
-# Initial synchronization and slideshow start
-sync_media
-
-# Check if images are present initially
-if find ~/media/feh -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
-  start_feh
-else
-  # Display black screen if no images are found
-  xsetroot -solid black &
-fi
-
-# Periodically check for new images on the server
-while true; do
-  sleep 300  # Check every 5 minutes
-  sync_media
-  if find ~/media/feh -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
-    start_feh
-  fi
-done
-```
-
-Make the script executable:
-
-```sh
-chmod +x ~/.xinitrc
-```
+7. **Reboot the System**
+   - Automatically reboots the system to apply all configurations.
 
 ---
 
-## 5. Reboot to Apply Changes
+### **How to Run the Setup Script**
 
-Restart the system to apply all changes:
+1. Download and make the script executable:
+   ```bash
+   chmod +x setup.sh
+   ```
 
-```sh
-sudo reboot
-```
+2. Execute the script:
+   ```bash
+   ./setup.sh
+   ```
 
----
-
-## 6. Configure Crontab for Scheduled HDMI-CEC Commands
-
-Edit the crontab with:
-
-```sh
-crontab -e
-```
-
-Add the following tasks:
-
-```sh
-# Prayer sessions from Monday to Friday
-0 6 * * 1-5 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
-0 9 * * 1-5 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
-
-# Wednesday evening
-30 18 * * 3 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
-0 20 * * 3 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
-
-# Sunday morning
-0 9 * * 7 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
-30 13 * * 7 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
-
-# Sunday evening
-0 17 * * 7 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
-30 19 * * 7 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
-```
+3. Follow the prompts to configure `rclone`.
 
 ---
 
-## **Expected Behavior**
+## **Expected Behavior After Installation**
 
-After reboot:
-- The system boots directly into a terminal.
-- X will automatically start without a cursor.
-- `rclone` will synchronize media files from remote storage.
-- HDMI-CEC will power on the display automatically.
-- `feh` will run a fullscreen slideshow and stay active.
+- The system boots directly into a terminal session.
+- X automatically starts in fullscreen mode without a cursor.
+- Media files are synchronized from remote storage every 5 minutes.
+- The display is automatically powered on or off according to the predefined schedule.
+- A fullscreen slideshow runs continuously, updating automatically when new images are detected.
 
 ---
 
-## **Additional Tips**
+## **Troubleshooting Tips**
 
-- To verify if `rclone` is syncing correctly:
+- **Verify Media Sync**:
+  ```bash
+  rclone ls remote:path
+  ```
+- **Manually Test HDMI-CEC Commands**:
+  ```bash
+  echo "standby 0" | cec-client -s -d 1  # Turn off display
+  echo "on 0" | cec-client -s -d 1       # Turn on display
+  ```
+- **Check Cron Jobs**:
+  ```bash
+  crontab -l
+  ```
 
-```sh
-rclone ls remote:path
-```
+---
 
-- To manually test HDMI-CEC commands:
+## 📂 **Log Files**
 
-```sh
-echo "standby 0" | cec-client -s -d 1  # Turn off display
-echo "on 0" | cec-client -s -d 1       # Turn on display
-```
+- Media synchronization logs can be found at:
+  ```bash
+  ~/feh_sync.log
+  ```
+
+This guide ensures a fully automated and efficient setup for digital signage using `feh`, `rclone`, and `cec-utils`.
+
+- Media synchronization logs can be found at:
+  ```bash
+  ~/feh_sync.log
+  ```
+
+This guide ensures a fully automated and efficient setup for digital signage using `feh`, `rclone`, and `cec-utils`.
