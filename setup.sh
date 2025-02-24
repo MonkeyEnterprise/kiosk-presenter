@@ -28,14 +28,20 @@ xset s noblank
 # Turn on display via HDMI-CEC
 echo "on 0" | cec-client -s -d 1
 
-# Synchronize media folder using rclone
-rclone sync remote:path ~/media/feh --delete-during
-
 # Function to start FEH slideshow
 start_feh() {
   pkill feh  # Stop any running feh instances
   feh -recursive -Y -x -q -D 30 -B black -F -Z ~/media/feh &
 }
+
+# Function to synchronize media folder using rclone
+sync_media() {
+  echo "$(date): Starting rclone sync" >> ~/feh_sync.log
+  rclone sync remote:path ~/media/feh --delete-during
+}
+
+# Initial synchronization and slideshow start
+sync_media
 
 # Check if images are present initially
 if find ~/media/feh -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
@@ -45,9 +51,14 @@ else
   xsetroot -solid black &
 fi
 
-# Monitor the folder for new images
-inotifywait -m -e create -e moved_to --format '%f' ~/media/feh | while read FILENAME; do
-  if echo "$FILENAME" | grep -Ei '\.(jpg|jpeg|png|bmp)$' > /dev/null; then
+# Periodically check for new images on the server
+while true; do
+  # Run rclone sync every 5 minutes
+  sleep 300
+  sync_media
+
+  # Check for new images and restart FEH if new images are found
+  if find ~/media/feh -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
     start_feh
   fi
 done
