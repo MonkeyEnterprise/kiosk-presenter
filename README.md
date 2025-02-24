@@ -19,14 +19,6 @@ mkdir -p ~/.config/openbox
 mkdir -p ~/media/feh
 ```
 
-## 3. Configure Auto-Start for X
-
-### Make the X-init script executable:
-
-```sh
-chmod +x ~/.xinitrc
-```
-
 ### Edit your `~/.bash_profile`:
 
 ```sh
@@ -66,6 +58,12 @@ rclone sync remote:path ~/media/feh --delete-during
 
 # Start FEH slideshow
 feh -recursive -Y -x -q -D 30 -B black -F -Z ~/media/feh
+```
+
+### Make the X-init script executable:
+
+```sh
+chmod +x ~/.xinitrc
 ```
 
 ## 5. Configure Rclone
