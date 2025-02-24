@@ -1,17 +1,18 @@
 
-# Installation Guide for Minimal FEH Setup with Rclone and CEC-Utils
+# 📖 **Installation Guide for Minimal FEH Setup with Rclone and CEC-Utils**
 
-## 1. Install Necessary Packages
+## ✅ 1. Install Necessary Packages
 
-Update your system and install the required packages:
+First, update your system and install all the required packages:
 
 ```sh
 sudo apt update
-sudo apt install xorg x11-xserver-utils feh rclone cec-utils inotify-tools
-
+sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils inotify-tools
 ```
 
-## 2. Set Up Directory Structure
+---
+
+## 📂 2. Set Up Directory Structure
 
 Create the required directories for configuration and media:
 
@@ -20,13 +21,17 @@ mkdir -p ~/.config/openbox
 mkdir -p ~/media/feh
 ```
 
-### Edit your `~/.bash_profile`:
+---
+
+### ⚙️ Edit Your `~/.bash_profile`
+
+Configure X to automatically start without a cursor on login:
 
 ```sh
 nano ~/.bash_profile
 ```
 
-Add the following lines to automatically start X on login without a cursor:
+Add the following lines:
 
 ```bash
 # Start X automatically if not already running
@@ -35,7 +40,11 @@ if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
 fi
 ```
 
-## 3. Configure Rclone
+Save and exit by pressing `CTRL+X`, then `Y`, and `Enter`.
+
+---
+
+## ☁️ 3. Configure Rclone
 
 Run the following command to configure `rclone`:
 
@@ -43,8 +52,9 @@ Run the following command to configure `rclone`:
 rclone config
 ```
 
-Follow the interactive menu to set up your remote storage connection (Google Drive, Dropbox, etc.). Once configured, use the remote name and path in your `.xinitrc` file.
+Follow the interactive menu to set up your remote storage (Google Drive, Dropbox, etc.). After setup, note the remote name and path for use in your `.xinitrc`.
 
+---
 
 ## 4. Configure `~/.xinitrc` for FEH Slideshow and CEC Power Management
 
@@ -54,7 +64,7 @@ Create or edit the `~/.xinitrc` file:
 nano ~/.xinitrc
 ```
 
-Add the following configuration to keep the screen active and start the slideshow:
+Add the following configuration:
 
 ```bash
 # Disable screen saver and power management
@@ -90,23 +100,21 @@ fi
 
 # Periodically check for new images on the server
 while true; do
-  # Run rclone sync every 5 minutes
-  sleep 300
+  sleep 300  # Check every 5 minutes
   sync_media
-
-  # Check for new images and restart FEH if new images are found
   if find ~/media/feh -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
     start_feh
   fi
 done
-
 ```
 
-### Make the X-init script executable:
+Make the script executable:
 
 ```sh
 chmod +x ~/.xinitrc
 ```
+
+---
 
 ## 5. Reboot to Apply Changes
 
@@ -118,8 +126,17 @@ sudo reboot
 
 ---
 
-Crontab 
-``` sh
+## 6. Configure Crontab for Scheduled HDMI-CEC Commands
+
+Edit the crontab with:
+
+```sh
+crontab -e
+```
+
+Add the following tasks:
+
+```sh
 # Prayer sessions from Monday to Friday
 0 6 * * 1-5 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
 0 9 * * 1-5 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
@@ -137,26 +154,28 @@ Crontab
 30 19 * * 7 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
 ```
 
-## Expected Behavior
+---
+
+## **Expected Behavior**
 
 After reboot:
-- The system will boot directly into a terminal.
+- The system boots directly into a terminal.
 - X will automatically start without a cursor.
-- Media files will synchronize from your remote storage using `rclone`.
-- HDMI-CEC will power on the display.
-- `feh` will automatically start the slideshow and keep the display active.
+- `rclone` will synchronize media files from remote storage.
+- HDMI-CEC will power on the display automatically.
+- `feh` will run a fullscreen slideshow and stay active.
 
 ---
 
-## Additional Tips
+## **Additional Tips**
 
-- To verify if `rclone` is syncing correctly, run:
+- To verify if `rclone` is syncing correctly:
 
 ```sh
 rclone ls remote:path
 ```
 
-- To test HDMI-CEC commands manually:
+- To manually test HDMI-CEC commands:
 
 ```sh
 echo "standby 0" | cec-client -s -d 1  # Turn off display
