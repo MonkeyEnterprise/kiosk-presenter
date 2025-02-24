@@ -107,6 +107,25 @@ sudo reboot
 
 ---
 
+Crontab 
+``` sh
+# Prayer sessions from Monday to Friday
+0 6 * * 1-5 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
+0 9 * * 1-5 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
+
+# Wednesday evening
+30 18 * * 3 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
+0 20 * * 3 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
+
+# Sunday morning
+0 9 * * 7 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
+30 13 * * 7 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
+
+# Sunday evening
+0 17 * * 7 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
+30 19 * * 7 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
+```
+
 ## Expected Behavior
 
 After reboot:
