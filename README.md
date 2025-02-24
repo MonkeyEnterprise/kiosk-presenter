@@ -1,7 +1,7 @@
 
-# 📖 **Installation Guide for Minimal FEH Setup with Rclone and CEC-Utils**
+# **Installation Guide for Minimal FEH Setup with Rclone and CEC-Utils**
 
-## ✅ 1. Install Necessary Packages
+## 1. Install Necessary Packages
 
 First, update your system and install all the required packages:
 
@@ -12,7 +12,7 @@ sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils inotify-tools
 
 ---
 
-## 📂 2. Set Up Directory Structure
+## 2. Set Up Directory Structure
 
 Create the required directories for configuration and media:
 
@@ -23,7 +23,7 @@ mkdir -p ~/media/feh
 
 ---
 
-### ⚙️ Edit Your `~/.bash_profile`
+### Edit Your `~/.bash_profile`
 
 Configure X to automatically start without a cursor on login:
 
@@ -44,7 +44,7 @@ Save and exit by pressing `CTRL+X`, then `Y`, and `Enter`.
 
 ---
 
-## ☁️ 3. Configure Rclone
+## ☁3. Configure Rclone
 
 Run the following command to configure `rclone`:
 
