@@ -1,38 +1,71 @@
 #!/bin/bash
 
-# Functie om Rclone, X11 en Feh te installeren
-install_software() {
-    echo "Installing Rclone, X11, and Feh..."
-    sudo apt update
-    sudo apt install -y rclone x11-xserver-utils feh
-    echo "Installation complete."
+echo "=== Updating system and installing necessary packages ==="
+sudo apt update
+sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils inotify-tools
+
+echo "=== Setting up directory structure ==="
+mkdir -p ~/.config/openbox
+mkdir -p ~/media/feh
+
+echo "=== Configuring ~/.bash_profile ==="
+if ! grep -q 'startx' ~/.bash_profile; then
+  echo '# Start X automatically if not already running' >> ~/.bash_profile
+  echo 'if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then' >> ~/.bash_profile
+  echo '  startx -- -nocursor' >> ~/.bash_profile
+  echo 'fi' >> ~/.bash_profile
+fi
+
+echo "=== Reminder: Please run 'rclone config' manually to set up your remote storage ==="
+
+echo "=== Creating and configuring ~/.xinitrc ==="
+cat <<EOL > ~/.xinitrc
+# Disable screen saver and power management
+xset s off
+xset -dpms
+xset s noblank
+
+# Turn on display via HDMI-CEC
+echo "on 0" | cec-client -s -d 1
+
+# Synchronize media folder using rclone
+rclone sync remote:path ~/media/feh --delete-during
+
+# Function to start FEH slideshow
+start_feh() {
+  pkill feh  # Stop any running feh instances
+  feh -recursive -Y -x -q -D 30 -B black -F -Z ~/media/feh &
 }
 
-# Functie om Feh in te stellen voor diavoorstelling
-setup_feh() {
-    read -p "Enter the directory for the slideshow: " slideshow_dir
-    read -p "Enter the slideshow interval in seconds: " interval
-    
-    echo "Setting up Feh..."
-    echo "feh --fullscreen --slideshow-delay $interval --reload 60 $slideshow_dir" > ~/start_feh.sh
-    chmod +x ~/start_feh.sh
-    
-    # Autostart Feh bij X11 startup
-    echo "@~/start_feh.sh" > ~/.xinitrc
-    
-    echo "Feh setup complete. Start with 'startx'."
-}
+# Check if images are present initially
+if find ~/media/feh -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
+  start_feh
+else
+  # Display black screen if no images are found
+  xsetroot -solid black &
+fi
 
-# Menu weergeven
-echo "Select an option:"
-echo "1) Install Rclone, X11, and Feh"
-echo "2) Setup Feh slideshow"
-echo "3) Exit"
-read -p "Enter your choice: " choice
+# Monitor the folder for new images
+inotifywait -m -e create -e moved_to --format '%f' ~/media/feh | while read FILENAME; do
+  if echo "$FILENAME" | grep -Ei '\.(jpg|jpeg|png|bmp)$' > /dev/null; then
+    start_feh
+  fi
+done
+EOL
 
-case $choice in
-    1) install_software ;;
-    2) setup_feh ;;
-    3) echo "Exiting..."; exit 0 ;;
-    *) echo "Invalid option, exiting..."; exit 1 ;;
-esac
+echo "=== Making ~/.xinitrc executable ==="
+chmod +x ~/.xinitrc
+
+echo "=== Setting up crontab with direct CEC commands ==="
+(crontab -l 2>/dev/null; echo "0 6 * * 1-5 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "0 9 * * 1-5 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "30 18 * * 3 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "0 20 * * 3 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "0 9 * * 7 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "30 13 * * 7 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "0 17 * * 7 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "30 19 * * 7 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
+
+echo "=== Setup complete. Please run 'rclone config' manually if you haven't done so yet. ==="
+echo "=== The system will reboot now to apply all changes. ==="
+sudo reboot
