@@ -7,7 +7,8 @@ Update your system and install the required packages:
 
 ```sh
 sudo apt update
-sudo apt install xorg x11-xserver-utils feh rclone cec-utils
+sudo apt install xorg x11-xserver-utils feh rclone cec-utils inotify-tools
+
 ```
 
 ## 2. Set Up Directory Structure
@@ -64,11 +65,29 @@ xset s noblank
 # Turn on display via HDMI-CEC
 echo "on 0" | cec-client -s -d 1
 
-# Synchronize media folder using rclone (replace 'remote:path' with your actual rclone config)
+# Synchronize media folder using rclone
 rclone sync remote:path ~/media/feh --delete-during
 
-# Start FEH slideshow
-feh -recursive -Y -x -q -D 30 -B black -F -Z ~/media/feh
+# Function to start FEH slideshow
+start_feh() {
+  pkill feh  # Stop any running feh instances
+  feh -recursive -Y -x -q -D 30 -B black -F -Z ~/media/feh &
+}
+
+# Check if images are present initially
+if find ~/media/feh -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
+  start_feh
+else
+  # Display black screen if no images are found
+  xsetroot -solid black &
+fi
+
+# Monitor the folder for new image files
+inotifywait -m -e create -e moved_to --format '%f' ~/media/feh | while read FILENAME; do
+  if [[ "$FILENAME" =~ \.(jpg|jpeg|png|bmp)$ ]]; then
+    start_feh
+  fi
+done
 ```
 
 ### Make the X-init script executable:
