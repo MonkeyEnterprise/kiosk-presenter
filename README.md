@@ -34,6 +34,17 @@ if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
 fi
 ```
 
+## 3. Configure Rclone
+
+Run the following command to configure `rclone`:
+
+```sh
+rclone config
+```
+
+Follow the interactive menu to set up your remote storage connection (Google Drive, Dropbox, etc.). Once configured, use the remote name and path in your `.xinitrc` file.
+
+
 ## 4. Configure `~/.xinitrc` for FEH Slideshow and CEC Power Management
 
 Create or edit the `~/.xinitrc` file:
@@ -66,17 +77,7 @@ feh -recursive -Y -x -q -D 30 -B black -F -Z ~/media/feh
 chmod +x ~/.xinitrc
 ```
 
-## 5. Configure Rclone
-
-Run the following command to configure `rclone`:
-
-```sh
-rclone config
-```
-
-Follow the interactive menu to set up your remote storage connection (Google Drive, Dropbox, etc.). Once configured, use the remote name and path in your `.xinitrc` file.
-
-## 6. Reboot to Apply Changes
+## 5. Reboot to Apply Changes
 
 Restart the system to apply all changes:
 
@@ -97,7 +98,7 @@ After reboot:
 
 ---
 
-## 💡 Additional Tips
+## Additional Tips
 
 - To verify if `rclone` is syncing correctly, run:
 
