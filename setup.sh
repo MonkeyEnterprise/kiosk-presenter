@@ -1,25 +1,41 @@
 #!/bin/bash
 
-echo "=== Updating system and installing necessary packages ==="
-sudo apt update
-sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils inotify-tools
+set -e  # Exit immediately if a command exits with a non-zero status
 
-echo "=== Setting up directory structure ==="
-mkdir -p ~/.config/openbox
-mkdir -p ~/media/feh
+### VARIABLES ###
+MEDIA_DIR="$HOME/media/feh"
+CONFIG_DIR="$HOME/.config/openbox"
+XINITRC="$HOME/.xinitrc"
+BASH_PROFILE="$HOME/.bash_profile"
+LOG_FILE="$HOME/feh_sync.log"
+REMOTE_PATH="remote:path"
 
-echo "=== Configuring ~/.bash_profile ==="
-if ! grep -q 'startx' ~/.bash_profile; then
-  echo '# Start X automatically if not already running' >> ~/.bash_profile
-  echo 'if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then' >> ~/.bash_profile
-  echo '  startx -- -nocursor' >> ~/.bash_profile
-  echo 'fi' >> ~/.bash_profile
-fi
+### FUNCTIONS ###
+install_packages() {
+    echo "=== Updating system and installing necessary packages ==="
+    sudo apt update
+    sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils inotify-tools
+}
 
-echo "=== Reminder: Please run 'rclone config' manually to set up your remote storage ==="
+setup_directories() {
+    echo "=== Setting up directory structure ==="
+    mkdir -p "$CONFIG_DIR"
+    mkdir -p "$MEDIA_DIR"
+}
 
-echo "=== Creating and configuring ~/.xinitrc ==="
-cat <<EOL > ~/.xinitrc
+configure_bash_profile() {
+    echo "=== Configuring ~/.bash_profile ==="
+    if ! grep -q 'startx' "$BASH_PROFILE"; then
+        echo -e '\n# Start X automatically if not already running' >> "$BASH_PROFILE"
+        echo 'if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then' >> "$BASH_PROFILE"
+        echo '  startx -- -nocursor' >> "$BASH_PROFILE"
+        echo 'fi' >> "$BASH_PROFILE"
+    fi
+}
+
+configure_xinitrc() {
+    echo "=== Creating and configuring ~/.xinitrc ==="
+    cat <<EOL > "$XINITRC"
 # Disable screen saver and power management
 xset s off
 xset -dpms
@@ -31,52 +47,75 @@ echo "on 0" | cec-client -s -d 1
 # Function to start FEH slideshow
 start_feh() {
   pkill feh  # Stop any running feh instances
-  feh -recursive -Y -x -q -D 30 -B black -F -Z ~/media/feh &
+  feh -recursive -Y -x -q -D 30 -B black -F -Z "$MEDIA_DIR" &
 }
 
 # Function to synchronize media folder using rclone
 sync_media() {
-  echo "$(date): Starting rclone sync" >> ~/feh_sync.log
-  rclone sync remote:path ~/media/feh --delete-during
+  echo "\$(date): Starting rclone sync" >> "$LOG_FILE"
+  rclone sync "$REMOTE_PATH" "$MEDIA_DIR" --delete-during
 }
 
 # Initial synchronization and slideshow start
 sync_media
 
 # Check if images are present initially
-if find ~/media/feh -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
+if find "$MEDIA_DIR" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
   start_feh
 else
-  # Display black screen if no images are found
-  xsetroot -solid black &
+  xsetroot -solid black &  # Display black screen if no images are found
 fi
 
 # Periodically check for new images on the server
 while true; do
-  # Run rclone sync every 5 minutes
-  sleep 300
+  sleep 300  # Check every 5 minutes
   sync_media
-
-  # Check for new images and restart FEH if new images are found
-  if find ~/media/feh -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
+  if find "$MEDIA_DIR" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
     start_feh
   fi
 done
 EOL
 
-echo "=== Making ~/.xinitrc executable ==="
-chmod +x ~/.xinitrc
+    chmod +x "$XINITRC"
+}
 
-echo "=== Setting up crontab with direct CEC commands ==="
-(crontab -l 2>/dev/null; echo "0 6 * * 1-5 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
-(crontab -l 2>/dev/null; echo "0 9 * * 1-5 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
-(crontab -l 2>/dev/null; echo "30 18 * * 3 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
-(crontab -l 2>/dev/null; echo "0 20 * * 3 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
-(crontab -l 2>/dev/null; echo "0 9 * * 7 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
-(crontab -l 2>/dev/null; echo "30 13 * * 7 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
-(crontab -l 2>/dev/null; echo "0 17 * * 7 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
-(crontab -l 2>/dev/null; echo "30 19 * * 7 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1") | crontab -
+setup_cron_jobs() {
+    echo "=== Setting up crontab with direct CEC commands ==="
+    crontab -l 2>/dev/null | grep -v "cec-client" | crontab -  # Remove old CEC jobs
+    (crontab -l 2>/dev/null; cat <<EOL
+# Prayer sessions from Monday to Friday
+0 6 * * 1-5 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
+0 9 * * 1-5 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
 
-echo "=== Setup complete. Please run 'rclone config' manually if you haven't done so yet. ==="
-echo "=== The system will reboot now to apply all changes. ==="
+# Wednesday evening
+30 18 * * 3 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
+0 20 * * 3 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
+
+# Sunday morning
+0 9 * * 7 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
+30 13 * * 7 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
+
+# Sunday evening
+0 17 * * 7 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
+30 19 * * 7 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
+EOL
+    ) | crontab -
+}
+
+initialize_rclone() {
+    read -p "Do you want to initialize rclone? (y/n) " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+        rclone config
+    fi
+}
+
+### MAIN EXECUTION ###
+install_packages
+setup_directories
+configure_bash_profile
+configure_xinitrc
+setup_cron_jobs
+initialize_rclone
+
+echo "=== Setup complete. System will now reboot. ==="
 sudo reboot
