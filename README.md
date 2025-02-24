@@ -82,12 +82,13 @@ else
   xsetroot -solid black &
 fi
 
-# Monitor the folder for new image files
+# Monitor the folder for new images
 inotifywait -m -e create -e moved_to --format '%f' ~/media/feh | while read FILENAME; do
-  if [[ "$FILENAME" =~ \.(jpg|jpeg|png|bmp)$ ]]; then
+  if echo "$FILENAME" | grep -Ei '\.(jpg|jpeg|png|bmp)$' > /dev/null; then
     start_feh
   fi
 done
+
 ```
 
 ### Make the X-init script executable:
