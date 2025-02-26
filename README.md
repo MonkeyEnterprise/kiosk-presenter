@@ -2,62 +2,109 @@
 
 <p align="center"> <img src="https://upload.wikimedia.org/wikipedia/en/thumb/c/cb/Raspberry_Pi_Logo.svg/200px-Raspberry_Pi_Logo.svg.png" width="15%"> </p>
 
-This script sets up a minimal digital signage system on Raspberry Pi 3, 4, and 5. It displays a fullscreen slideshow using `feh`, synchronizes media via `rclone`, and manages display power using `cec-utils`.
+This script sets up a minimal digital signage system on Raspberry Pi 3, 4, and 5. It enables fullscreen image slideshows using `feh`, synchronizes media via `rclone`, and manages display power with `cec-utils`.
 
 ## Features
 
-- **Fullscreen Slideshow**: Displays images with `feh`, updating automatically when new images are added.
-- **Remote Sync**: Downloads images from cloud storage (Google Drive, Dropbox, etc.) using `rclone`.
-- **HDMI-CEC Control**: Turns the display on/off automatically with `cec-utils`.
-- **Real-Time Monitoring**: Detects new images and updates the slideshow.
-- **Scheduled Power Management**: Controls display power via `cron` jobs.
+- **Fullscreen Slideshow**: Displays images with `feh`, automatically updating when new images are added.
+- **Remote Sync**: Synchronizes images from cloud storage (Google Drive, Dropbox, etc.) using `rclone`.
+- **HDMI-CEC Control**: Automatically turns the display on/off using `cec-utils`.
+- **Real-Time Monitoring**: Detects new images and updates the slideshow accordingly.
+- **Scheduled Power Management**: Manages display power via `cron` jobs.
 
 ## Installation
 
-Run the setup script using `wget`:
+To install, run the setup script using `wget`:
+
 ```bash
 wget https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/refs/heads/main/setup.sh -O setup.sh
 chmod +x setup.sh
 ./setup.sh
 ```
 
-or run the setup script using `git`:
+Alternatively, use `git`:
+
 ```bash
 git clone https://github.com/MonkeyEnterprise/kiosk-presenter.git ~/kiosk-presenter
 chmod +x ~/kiosk-presenter/setup.sh
 . ~/kiosk-presenter/setup.sh
 ```
 
-Follow the prompts to configure `rclone`.
+### Configuring `rclone`
+
+Follow the prompts to configure `rclone`:
+
+```bash
+rclone config
+```
+
+Enter the following details:
+
+```
+name> dropbox_kiosk
+storage> dropbox
+client_id> (leave empty)
+client_secret> (leave empty)
+advanced_config> No
+auto_config> No
+```
+
+On another Linux machine with `rclone` installed, run:
+
+```bash
+rclone authorize "dropbox"
+```
+
+Log in and copy the `access_token` from the terminal on the headless machine:
+
+```json
+{
+  "access_token": "",
+  "token_type": "",
+  "refresh_token": "",
+  "expiry": ""
+}
+```
+
+Then, confirm with:
+
+```
+y/e/d> y
+```
+
+Modify configuration using `nano` if necessary.
 
 ## Behavior After Installation
 
-- Boots into a terminal session with X running in fullscreen mode.
-- Syncs media files every 5 minutes.
-- Controls display power based on a predefined schedule.
-- Runs a continuous, auto-updating slideshow.
+- The system boots into a terminal session with X running in fullscreen mode.
+- Media files sync every 5 minutes.
+- The display power is controlled based on a predefined schedule.
+- A continuous, auto-updating slideshow runs indefinitely.
 
 ## Troubleshooting
 
-- **Check media sync**:
-  ```bash
-  rclone ls remote:path
-  ```
-- **Test HDMI-CEC commands**:
-  ```bash
-  echo "standby 0" | cec-client -s -d 1  # Turn off display
-  echo "on 0" | cec-client -s -d 1       # Turn on display
-  ```
-- **View cron jobs**:
-  ```bash
-  crontab -l
-  ```
+### Check Media Sync
+
+```bash
+rclone ls dropbox_kiosk:
+```
+
+### Test HDMI-CEC Commands
+
+```bash
+echo "standby 0" | cec-client -s -d 1  # Turn off display
+echo "on 0" | cec-client -s -d 1       # Turn on display
+```
+
+### View Scheduled Tasks
+
+```bash
+crontab -l
+```
 
 ## Logs
 
-Media sync logs:
+To view media sync logs:
+
 ```bash
 tail -f ~/feh_sync.log
-```
-
----
