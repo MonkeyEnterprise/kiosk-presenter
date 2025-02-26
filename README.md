@@ -14,10 +14,20 @@ This script sets up a minimal digital signage system on Raspberry Pi 3, 4, and 5
 
 ## Installation
 
-Run the setup script:
+Run the setup script using `wget`:
 ```bash
-wget -qO- https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/refs/heads/main/setup.sh | sh
+wget https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/refs/heads/main/setup.sh -O setup.sh
+chmod +x setup.sh
+./setup.sh
 ```
+
+or run the setup script using `git`:
+```bash
+git clone https://github.com/MonkeyEnterprise/kiosk-presenter.git ~/kiosk-presenter
+chmod +x ~/kiosk-presenter/setup.sh
+. ~/kiosk-presenter/setup.sh
+```
+
 Follow the prompts to configure `rclone`.
 
 ## Behavior After Installation
