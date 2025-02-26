@@ -5,9 +5,9 @@ set -e  # Exit immediately if a command exits with a non-zero status
 ### VARIABLES ###
 MEDIA_DIR="$HOME/media/feh"
 CONFIG_DIR="$HOME/.config/openbox"
-XINITRC="~/.xinitrc"
-BASH_PROFILE="~/.bash_profile"
-LOG_FILE="~/feh_sync.log"
+XINITRC="$HOME/.xinitrc"
+BASH_PROFILE="$HOME/.bash_profile"
+LOG_FILE="$HOME/feh_sync.log"
 REMOTE_PATH="dropbox_kiosk:<path>"
 
 ### FUNCTIONS ###
