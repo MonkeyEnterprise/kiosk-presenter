@@ -8,7 +8,7 @@ CONFIG_DIR="$HOME/.config/openbox"
 XINITRC="$HOME/.xinitrc"
 BASH_PROFILE="$HOME/.bash_profile"
 LOG_FILE="$HOME/feh_sync.log"
-REMOTE_PATH="remote:path"
+REMOTE_PATH="dropbox_kiosk:path"
 
 ### FUNCTIONS ###
 install_packages() {
