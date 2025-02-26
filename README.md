@@ -11,6 +11,7 @@ This script sets up a minimal digital signage system on Raspberry Pi 3, 4, and 5
 - **HDMI-CEC Control**: Automatically turns the display on/off using `cec-utils`.
 - **Real-Time Monitoring**: Detects new images and updates the slideshow accordingly.
 - **Scheduled Power Management**: Manages display power via `cron` jobs.
+-  **Media files sync every 10 minutes (max 20 images x 30 seconds).**
 
 ## Installation
 
