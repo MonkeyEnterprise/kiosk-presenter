@@ -52,27 +52,32 @@ start_feh() {
 
 # Function to synchronize media folder using rclone
 sync_media() {
-  echo "\$(date): Starting rclone sync" >> "$LOG_FILE"
+  echo "$(date): Starting rclone sync" >> "$LOG_FILE"
   rclone sync "$REMOTE_PATH" "$MEDIA_DIR" --delete-during
+}
+
+# Function to check if images exist and start feh accordingly
+update_display() {
+  if find "$MEDIA_DIR" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
+    # Kill existing feh instances before starting a new one
+    pkill -x feh
+    start_feh
+  else
+    # Kill feh if no images are found and set black background
+    pkill -x feh
+    xsetroot -solid black &
+  fi
 }
 
 # Initial synchronization and slideshow start
 sync_media
-
-# Check if images are present initially
-if find "$MEDIA_DIR" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
-  start_feh
-else
-  xsetroot -solid black &  # Display black screen if no images are found
-fi
+update_display
 
 # Periodically check for new images on the server
 while true; do
   sleep 300  # Check every 5 minutes
   sync_media
-  if find "$MEDIA_DIR" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
-    start_feh
-  fi
+  update_display
 done
 EOL
 
