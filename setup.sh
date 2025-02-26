@@ -46,7 +46,6 @@ echo "on 0" | cec-client -s -d 1
 
 # Function to start FEH slideshow
 start_feh() {
-  pkill feh  # Stop any running feh instances
   feh -recursive -Y -x -q -D 30 -B black -F -Z "$MEDIA_DIR" &
 }
 
