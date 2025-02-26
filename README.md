@@ -74,7 +74,7 @@ y/e/d> y
 
 Modify the line in `~/.xinitrc` file:
 ```bash
-rclone sync "dropbox:/<path_to_images>" "~/media/feh" --delete-during
+rclone sync dropbox_kiosk:"/<path_to_images>" ~/media/feh
 ```
 
 ## Behavior After Installation
