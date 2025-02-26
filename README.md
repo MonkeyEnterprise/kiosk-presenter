@@ -72,7 +72,10 @@ Then, confirm with:
 y/e/d> y
 ```
 
-Modify configuration using `nano` if necessary.
+Modify the line in `~/.xinitrc` file:
+```bash
+rclone sync "dropbox:/<path_to_images>" "~/media/feh" --delete-during
+```
 
 ## Behavior After Installation
 
