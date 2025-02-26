@@ -74,7 +74,7 @@ update_display
 
 # Periodically check for new images on the server
 while true; do
-  sleep 300  # Check every 5 minutes
+  sleep 600  # Check every 10 minutes
   sync_media
   update_display
 done
