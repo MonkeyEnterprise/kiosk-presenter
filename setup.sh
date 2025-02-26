@@ -26,10 +26,13 @@ setup_directories() {
 configure_bash_profile() {
     echo "=== Configuring ~/.bash_profile ==="
     if ! grep -q 'startx' "$BASH_PROFILE"; then
-        echo -e '\n# Start X automatically if not already running' >> "$BASH_PROFILE"
-        echo 'if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then' >> "$BASH_PROFILE"
-        echo '  startx -- -nocursor' >> "$BASH_PROFILE"
-        echo 'fi' >> "$BASH_PROFILE"
+        cat <<EOL >> "$BASH_PROFILE"
+
+# Automatically start X if not already running
+if [[ -z \$DISPLAY && \$XDG_VTNR -eq 1 ]]; then
+  startx -- -nocursor
+fi
+EOL
     fi
 }
 
@@ -75,7 +78,6 @@ while true; do
   fi
 done
 EOL
-
     chmod +x "$XINITRC"
 }
 
@@ -83,7 +85,7 @@ setup_cron_jobs() {
     echo "=== Setting up crontab with direct CEC commands ==="
     crontab -l 2>/dev/null | grep -v "cec-client" | crontab -  # Remove old CEC jobs
     (crontab -l 2>/dev/null; cat <<EOL
-# Prayer sessions from Monday to Friday
+# Schedule HDMI-CEC power control for prayer sessions
 0 6 * * 1-5 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
 0 9 * * 1-5 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
 
@@ -118,4 +120,7 @@ setup_cron_jobs
 initialize_rclone
 
 echo "=== Setup complete. System will now reboot. ==="
-sudo reboot
+read -p "Do you want to reboot? (y/n) " choice
+if [[ "$choice" =~ ^[Yy]$ ]]; then
+  sudo reboot
+fi

@@ -1,0 +1,26 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"cSpell.ignoreWords": [
+			"xinitrc",
+			"xorg",
+			"rclone",
+			"inotify",
+			"startx",
+			"XDG_VTNR",
+			"nocursor",
+			"xset",
+			"dpms",
+			"noblank",
+			"pkill",
+			"xsetroot",
+			"iname",
+			"openbox",
+			"fullscreen"
+		]
+	}
+}
