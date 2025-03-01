@@ -1,102 +1,124 @@
 #!/bin/bash
 
-set -e  # Exit immediately if a command exits with a non-zero status
+set -e  # Exit immediately if a command exits with a non-zero status.
 
 ### VARIABLES ###
 MEDIA_DIR="$HOME/media/feh"
-CONFIG_DIR="$HOME/.config/openbox"
 XINITRC="$HOME/.xinitrc"
 BASH_PROFILE="$HOME/.bash_profile"
 LOG_FILE="$HOME/feh_sync.log"
+HASH_FILE="$MEDIA_DIR/.last_hash"
 REMOTE_PATH="dropbox_kiosk:/path"
 
 ### FUNCTIONS ###
-install_packages() {
-    echo "=== Updating system and installing necessary packages ==="
+
+install_dependencies() {
+    echo "=== Installing necessary packages ==="
     sudo apt update && sudo apt full-upgrade -y
-    sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils inotify-tools
+    sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils
 }
 
-setup_directories() {
-    echo "=== Setting up directory structure ==="
-    mkdir -p "$CONFIG_DIR"
+setup_media_directory() {
+    echo "=== Setting up media directory ==="
     mkdir -p "$MEDIA_DIR"
-    wget https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/refs/heads/main/assets/no-image.png -P "$MEDIA_DIR"
+    wget -q -O "$MEDIA_DIR/no-image.png" \
+        "https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/refs/heads/main/assets/no-image.png"
 }
 
 configure_bash_profile() {
     echo "=== Configuring ~/.bash_profile ==="
+
+    # Append startx autostart only if it's not already present
     if ! grep -q 'startx' "$BASH_PROFILE"; then
-        echo -e '\n# Start X automatically if not already running' >> "$BASH_PROFILE"
-        echo 'if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then' >> "$BASH_PROFILE"
-        echo '  startx -- -nocursor' >> "$BASH_PROFILE"
-        echo 'fi' >> "$BASH_PROFILE"
+        cat << 'EOF' >> "$BASH_PROFILE"
+
+# Start X automatically if not already running
+if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
+    while true; do
+        startx -- -nocursor
+        sleep 5
+    done
+fi
+EOF
     fi
 }
 
-configure_xinitrc() {
-    echo "=== Creating and configuring ~/.xinitrc ==="
+create_xinitrc() {
+    echo "=== Creating ~/.xinitrc ==="
+
     cat <<EOL > "$XINITRC"
-# Disable screen saver and power management
-xset s off
-xset -dpms
-xset s noblank
+#!/bin/bash
+xset s off &
+xset -dpms &
+xset s noblank &
 
-# Turn on display via HDMI-CEC
-echo "on 0" | cec-client -s -d 1
+mkdir -p "$MEDIA_DIR"
 
-# Function to start FEH slideshow
-start_feh() {
-  feh -recursive -Y -x -q -D 30 -B black -F -Z "$MEDIA_DIR" &
-}
-
-# Function to synchronize media folder using rclone
+# Function to synchronize media using rclone
 sync_media() {
-  echo "\$(date): Starting rclone sync" >> "$LOG_FILE"
-  rclone sync "$REMOTE_PATH" "$MEDIA_DIR" --delete-during
+    echo "\$(date): Starting rclone sync" >> "$LOG_FILE"
+    (rclone sync "$REMOTE_PATH" "$MEDIA_DIR" --delete-during >> "$LOG_FILE" 2>&1 || true)
 }
 
-# Function to check if images exist and start feh accordingly
-update_display() {
-  if find "$MEDIA_DIR" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.jpeg' -o -iname '*.bmp' \) | grep -q .; then
-    # Kill existing feh instances before starting a new one
-    pkill -x feh
-    start_feh
-  else
-    # Kill feh if no images are found and set black background
-    pkill -x feh
-    xsetroot -solid black &
-  fi
+# Function to start the slideshow and restart on failure
+start_feh() {
+    echo "\$(date): Starting feh" >> "$LOG_FILE"
+    while true; do
+        feh -recursive -Y -x -q -D 30 -B black -F -Z "$MEDIA_DIR"
+        sleep 5
+    done
 }
 
-# Function to monitor the media directory for changes using inotifywait
-monitor_media_changes() {
-  inotifywait -m -e create -e moved_to -e modify "$MEDIA_DIR" --format '%w%f' | while read new_file
-  do
-    echo "\$(date): Detected change - $new_file" >> "$LOG_FILE"
-    update_display  # Update the display when a new file is added or modified
-  done
+# Function to detect media changes and restart feh if needed
+update_display_if_changed() {
+    NEW_HASH=\$(ls -lR "$MEDIA_DIR" | sha256sum)
+
+    if [ ! -f "$HASH_FILE" ]; then
+        echo "$NEW_HASH" > "$HASH_FILE"
+    fi
+
+    OLD_HASH=\$(cat "$HASH_FILE")
+    echo "\$(date): Old hash: \$OLD_HASH" >> "$LOG_FILE"
+    echo "\$(date): New hash: \$NEW_HASH" >> "$LOG_FILE"
+
+    if [ "\$NEW_HASH" != "\$OLD_HASH" ]; then
+        echo "\$(date): Media changed, restarting feh" >> "$LOG_FILE"
+        echo "\$NEW_HASH" > "$HASH_FILE"
+        pkill -x feh
+        start_feh &
+    else
+        echo "\$(date): No changes detected, feh continues running" >> "$LOG_FILE"
+    fi
+
+    if ! pgrep -x feh > /dev/null; then
+        echo "\$(date): feh was not running, starting feh" >> "$LOG_FILE"
+        start_feh &
+    fi
 }
 
-# Initial synchronization and slideshow start
+# Initial sync and display update
 sync_media
-update_display
+update_display_if_changed
 
-# Start monitoring the directory for changes
-monitor_media_changes &
+# Sync and check for changes every 5 minutes
+while true; do
+    sleep 300
+    sync_media
+    update_display_if_changed
+done
 EOL
 
     chmod +x "$XINITRC"
 }
 
-setup_cron_jobs() {
-    echo "=== Setting up crontab with direct CEC commands ==="
+setup_crontab() {
+    echo "=== Setting up CEC power schedule in crontab ==="
 
-    # Verwijder bestaande CEC jobs
+    # Remove existing CEC commands
     crontab -l 2>/dev/null | grep -v "cec-client" | crontab -
 
-    # Voeg nieuwe CEC jobs toe
-    (crontab -l 2>/dev/null; echo "
+    # Add new schedule
+    (crontab -l 2>/dev/null; cat <<EOF
 0 6 * * 1-5 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1
 0 9 * * 1-5 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1
 30 18 * * 3 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1
@@ -105,26 +127,32 @@ setup_cron_jobs() {
 30 13 * * 7 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1
 0 17 * * 7 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1
 30 19 * * 7 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1
-") | crontab -
+EOF
+    ) | crontab -
 }
 
-initialize_rclone() {
+prompt_rclone_setup() {
     read -p "Do you want to initialize rclone? (y/n) " choice
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         rclone config
     fi
 }
 
-### MAIN EXECUTION ###
-install_packages
-setup_directories
-configure_bash_profile
-configure_xinitrc
-setup_cron_jobs
-initialize_rclone
+prompt_reboot() {
+    read -p "Do you want to reboot? (y/n) " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+        echo "=== Rebooting system now... ==="
+        sudo reboot now
+    else
+        echo "=== Setup complete. Please restart manually when ready. ==="
+    fi
+}
 
-echo "=== Setup complete. System will now reboot. ==="
-read -p "Do you want to reboot? (y/n) " choice
-if [[ "$choice" =~ ^[Yy]$ ]]; then
-  sudo reboot now
-fi
+### MAIN EXECUTION ###
+install_dependencies
+setup_media_directory
+configure_bash_profile
+create_xinitrc
+setup_crontab
+prompt_rclone_setup
+prompt_reboot

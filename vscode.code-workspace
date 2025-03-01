@@ -19,8 +19,9 @@
 			"pkill",
 			"xsetroot",
 			"iname",
-			"openbox",
-			"fullscreen"
+			"inotifywait",
+			"fullscreen",
+			"OLD"
 		]
 	}
 }

@@ -11,14 +11,13 @@ This script sets up a minimal digital signage system on Raspberry Pi 3, 4, and 5
 - **HDMI-CEC Control**: Automatically turns the display on/off using `cec-utils`.
 - **Real-Time Monitoring**: Detects new images and updates the slideshow accordingly.
 - **Scheduled Power Management**: Manages display power via `cron` jobs.
--  **Media files sync every 10 minutes (max 20 images x 30 seconds).**
 
 ## Installation
 
 To install, run the setup script using `wget`:
 
 ```bash
-wget https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/refs/heads/main/setup.sh -O setup.sh
+wget https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/main/setup.sh -O setup.sh
 chmod +x setup.sh
 ./setup.sh
 ```
@@ -28,7 +27,7 @@ Alternatively, use `git`:
 ```bash
 git clone https://github.com/MonkeyEnterprise/kiosk-presenter.git ~/kiosk-presenter
 chmod +x ~/kiosk-presenter/setup.sh
-. ~/kiosk-presenter/setup.sh
+./kiosk-presenter/setup.sh
 ```
 
 ### Configuring `rclone`
@@ -56,7 +55,7 @@ On another Linux machine with `rclone` installed, run:
 rclone authorize "dropbox"
 ```
 
-Log in and copy the `access_token` from the terminal on the headless machine:
+Log in and copy the `access_token` from the terminal on the kiosk machine:
 
 ```json
 {
@@ -73,7 +72,8 @@ Then, confirm with:
 y/e/d> y
 ```
 
-Modify the line in `~/.xinitrc` file:
+Modify the line in `~/.xinitrc` file to ensure media sync on startup:
+
 ```bash
 rclone sync dropbox_kiosk:"/<path_to_images>" ~/media/feh
 ```
@@ -81,7 +81,7 @@ rclone sync dropbox_kiosk:"/<path_to_images>" ~/media/feh
 ## Behavior After Installation
 
 - The system boots into a terminal session with X running in fullscreen mode.
-- Media files sync every **10 minutes (max 20 images x 30 seconds)**.
+- Media files sync every **10 minutes** (max **20 images x 30 seconds** per cycle).
 - The display power is controlled based on a predefined schedule.
 - A continuous, auto-updating slideshow runs indefinitely.
 
@@ -112,3 +112,4 @@ To view media sync logs:
 
 ```bash
 tail -f ~/feh_sync.log
+```
