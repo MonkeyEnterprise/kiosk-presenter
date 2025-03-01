@@ -126,5 +126,5 @@ monitor_media_changes &
 echo "=== Setup complete. System will now reboot. ==="
 read -p "Do you want to reboot? (y/n) " choice
 if [[ "$choice" =~ ^[Yy]$ ]]; then
-  sudo reboot
+  sudo reboot now
 fi
