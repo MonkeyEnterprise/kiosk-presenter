@@ -8,12 +8,12 @@ CONFIG_DIR="$HOME/.config/openbox"
 XINITRC="$HOME/.xinitrc"
 BASH_PROFILE="$HOME/.bash_profile"
 LOG_FILE="$HOME/feh_sync.log"
-REMOTE_PATH="dropbox_kiosk:path"
+REMOTE_PATH="dropbox_kiosk:/path"
 
 ### FUNCTIONS ###
 install_packages() {
     echo "=== Updating system and installing necessary packages ==="
-    sudo apt update
+    sudo apt update && sudo apt full-upgrade -y
     sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils inotify-tools
 }
 
@@ -69,19 +69,13 @@ update_display() {
   fi
 }
 
-# Initial synchronization and slideshow start
-sync_media
-update_display
-
-# Periodically check for new images on the server
-while true; do
-  sleep 600  # Check every 10 minutes
-  sync_media
-  update_display
-done
-EOL
-
-    chmod +x "$XINITRC"
+# Function to monitor the media directory for changes using inotifywait
+monitor_media_changes() {
+  inotifywait -m -e create -e moved_to -e modify "$MEDIA_DIR" --format '%w%f' | while read new_file
+  do
+    echo "$(date): Detected change - $new_file" >> "$LOG_FILE"
+    update_display  # Update the display when a new file is added or modified
+  done
 }
 
 setup_cron_jobs() {
