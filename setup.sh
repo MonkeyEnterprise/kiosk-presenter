@@ -116,6 +116,13 @@ configure_xinitrc
 setup_cron_jobs
 initialize_rclone
 
+# Initial synchronization and slideshow start
+sync_media
+update_display
+
+# Start monitoring the directory for changes
+monitor_media_changes &
+
 echo "=== Setup complete. System will now reboot. ==="
 read -p "Do you want to reboot? (y/n) " choice
 if [[ "$choice" =~ ^[Yy]$ ]]; then
