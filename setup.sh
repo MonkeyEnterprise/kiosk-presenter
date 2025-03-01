@@ -21,7 +21,7 @@ setup_directories() {
     echo "=== Setting up directory structure ==="
     mkdir -p "$CONFIG_DIR"
     mkdir -p "$MEDIA_DIR"
-    wget https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/refs/heads/main/assets/no-image.png -P $MEDIA_DIR
+    wget https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/refs/heads/main/assets/no-image.png -P "$MEDIA_DIR"
 }
 
 configure_bash_profile() {
@@ -52,7 +52,7 @@ start_feh() {
 
 # Function to synchronize media folder using rclone
 sync_media() {
-  echo "$(date): Starting rclone sync" >> "$LOG_FILE"
+  echo "\$(date): Starting rclone sync" >> "$LOG_FILE"
   rclone sync "$REMOTE_PATH" "$MEDIA_DIR" --delete-during
 }
 
@@ -73,32 +73,39 @@ update_display() {
 monitor_media_changes() {
   inotifywait -m -e create -e moved_to -e modify "$MEDIA_DIR" --format '%w%f' | while read new_file
   do
-    echo "$(date): Detected change - $new_file" >> "$LOG_FILE"
+    echo "\$(date): Detected change - $new_file" >> "$LOG_FILE"
     update_display  # Update the display when a new file is added or modified
   done
 }
 
+# Initial synchronization and slideshow start
+sync_media
+update_display
+
+# Start monitoring the directory for changes
+monitor_media_changes &
+EOL
+
+    chmod +x "$XINITRC"
+}
+
 setup_cron_jobs() {
     echo "=== Setting up crontab with direct CEC commands ==="
-    crontab -l 2>/dev/null | grep -v "cec-client" | crontab -  # Remove old CEC jobs
-    (crontab -l 2>/dev/null; cat <<EOL
-# Prayer sessions from Monday to Friday
-0 6 * * 1-5 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
-0 9 * * 1-5 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
 
-# Wednesday evening
-30 18 * * 3 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
-0 20 * * 3 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
+    # Verwijder bestaande CEC jobs
+    crontab -l 2>/dev/null | grep -v "cec-client" | crontab -
 
-# Sunday morning
-0 9 * * 7 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
-30 13 * * 7 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
-
-# Sunday evening
-0 17 * * 7 echo "on 0" | cec-client -s -d 1 >/dev/null 2>&1
-30 19 * * 7 echo "standby 0" | cec-client -s -d 1 >/dev/null 2>&1
-EOL
-    ) | crontab -
+    # Voeg nieuwe CEC jobs toe
+    (crontab -l 2>/dev/null; echo "
+0 6 * * 1-5 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1
+0 9 * * 1-5 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1
+30 18 * * 3 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1
+0 20 * * 3 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1
+0 9 * * 7 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1
+30 13 * * 7 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1
+0 17 * * 7 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1
+30 19 * * 7 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1
+") | crontab -
 }
 
 initialize_rclone() {
@@ -115,13 +122,6 @@ configure_bash_profile
 configure_xinitrc
 setup_cron_jobs
 initialize_rclone
-
-# Initial synchronization and slideshow start
-sync_media
-update_display
-
-# Start monitoring the directory for changes
-monitor_media_changes &
 
 echo "=== Setup complete. System will now reboot. ==="
 read -p "Do you want to reboot? (y/n) " choice
