@@ -21,7 +21,7 @@ setup_directories() {
     echo "=== Setting up directory structure ==="
     mkdir -p "$CONFIG_DIR"
     mkdir -p "$MEDIA_DIR"
-    wget https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/refs/heads/main/assets/no-image.png
+    wget https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/refs/heads/main/assets/no-image.png -P $MEDIA_DIR
 }
 
 configure_bash_profile() {
