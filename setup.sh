@@ -57,7 +57,7 @@ mkdir -p "$MEDIA_DIR"
 # Function to synchronize media using rclone
 sync_media() {
     echo "\$(date): Starting rclone sync" >> "$LOG_FILE"
-    (rclone sync "$REMOTE_PATH" "$MEDIA_DIR" --delete-during >> "$LOG_FILE" 2>&1 || true)
+    (rclone sync "$REMOTE_PATH" "$MEDIA_DIR" --exclude "*/**" --delete-during >> "$LOG_FILE" 2>&1 || true)
 }
 
 # Function to start the slideshow and restart on failure
