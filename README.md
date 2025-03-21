@@ -81,7 +81,7 @@ rclone sync dropbox_kiosk:"/<path_to_images>" ~/media/feh
 ## Behavior After Installation
 
 - The system boots into a terminal session with X running in fullscreen mode.
-- Media files sync every **10 minutes** (max **20 images x 30 seconds** per cycle).
+- Media files sync every 5 minutes.
 - The display power is controlled based on a predefined schedule.
 - A continuous, auto-updating slideshow runs indefinitely.
 
