@@ -2,19 +2,23 @@
 
 <p align="center"> <img src="https://upload.wikimedia.org/wikipedia/en/thumb/c/cb/Raspberry_Pi_Logo.svg/200px-Raspberry_Pi_Logo.svg.png" width="15%"> </p>
 
-This script sets up a minimal digital signage system on Raspberry Pi 3, 4, and 5. It enables fullscreen image slideshows using `feh`, synchronizes media via `rclone`, and manages display power with `cec-utils`.
+This repository provides a script to set up a minimal digital signage system on Raspberry Pi 4 and 5, combined with optional Cloudflared tunneling for secure remote access. The system supports fullscreen image slideshows using `feh`, cloud media synchronization via `rclone`, and HDMI-CEC display control with `cec-utils`.
+
+---
 
 ## Features
 
-- **Fullscreen Slideshow**: Displays images with `feh`, automatically updating when new images are added.
-- **Remote Sync**: Synchronizes images from cloud storage (Google Drive, Dropbox, etc.) using `rclone`.
-- **HDMI-CEC Control**: Automatically turns the display on/off using `cec-utils`.
-- **Real-Time Monitoring**: Detects new images and updates the slideshow accordingly.
-- **Scheduled Power Management**: Manages display power via `cron` jobs.
+* **Fullscreen Slideshow**: Automatically displays images in fullscreen using `feh`, with real-time updates.
+* **Remote Media Synchronization**: Fetches images from cloud storage providers like Google Drive or Dropbox using `rclone`.
+* **HDMI-CEC Display Control**: Automatically turns the display on or off using `cec-utils`.
+* **Cloudflared Tunnel Integration**: Optional secure tunnel setup for remote access using Cloudflare Tunnel.
+* **Scheduled Power Management**: Display power is managed using cron jobs.
+
+---
 
 ## Installation
 
-To install, run the setup script using `wget`:
+### Using `wget`
 
 ```bash
 wget https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/main/setup.sh -O setup.sh
@@ -22,7 +26,7 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-Alternatively, use `git`:
+### Using `git`
 
 ```bash
 git clone https://github.com/MonkeyEnterprise/kiosk-presenter.git ~/kiosk-presenter
@@ -30,15 +34,17 @@ chmod +x ~/kiosk-presenter/setup.sh
 ./kiosk-presenter/setup.sh
 ```
 
-### Configuring `rclone`
+---
 
-Follow the prompts to configure `rclone`:
+## Configuring `rclone`
+
+Run the following command to start configuration:
 
 ```bash
 rclone config
 ```
 
-Enter the following details:
+Provide these details:
 
 ```
 name> dropbox_kiosk
@@ -49,45 +55,58 @@ advanced_config> No
 auto_config> No
 ```
 
-On another Linux machine with `rclone` installed, run:
+On another Linux machine with `rclone`, authorize Dropbox:
 
 ```bash
 rclone authorize "dropbox"
 ```
 
-Log in and copy the `access_token` from the terminal on the kiosk machine:
-
-```json
-{
-  "access_token": "",
-  "token_type": "",
-  "refresh_token": "",
-  "expiry": ""
-}
-```
-
-Then, confirm with:
+Copy the `access_token` output and confirm:
 
 ```
 y/e/d> y
 ```
 
-Modify the line in `~/.xinitrc` file to ensure media sync on startup:
+Update `~/.xinitrc` to synchronize media at startup:
 
 ```bash
 rclone sync dropbox_kiosk:"/<path_to_images>" ~/media/feh
 ```
 
+---
+
+## Cloudflared Tunnel Setup (Optional)
+
+The script includes an optional function to set up a Cloudflare Tunnel for secure remote access:
+
+1. Prompts the user to initialize Cloudflared.
+2. Detects system architecture and downloads the appropriate Cloudflared binary.
+3. Installs Cloudflared and logs in to your Cloudflare account.
+4. Creates a tunnel with a user-defined name.
+5. Configures DNS routing and generates `/etc/cloudflared/config.yml`.
+6. Installs and enables Cloudflared as a systemd service.
+
+To reset or remove Cloudflared completely, the script includes a cleanup function that:
+
+* Stops and disables all Cloudflared services.
+* Removes service and timer files.
+* Deletes the Cloudflared binary and configuration directories.
+
+---
+
 ## Behavior After Installation
 
-- The system boots into a terminal session with X running in fullscreen mode.
-- Media files sync every 5 minutes.
-- The display power is controlled based on a predefined schedule.
-- A continuous, auto-updating slideshow runs indefinitely.
+* System boots into a terminal session with X starting in fullscreen mode.
+* Media files are synchronized every 5 minutes.
+* Display power is automatically managed according to schedule.
+* Continuous, auto-updating slideshow runs indefinitely.
+* Optional remote access is enabled through Cloudflared tunnel.
+
+---
 
 ## Troubleshooting
 
-### Check Media Sync
+### Check Media Synchronization
 
 ```bash
 rclone ls dropbox_kiosk:
@@ -106,10 +125,9 @@ echo "on 0" | cec-client -s -d 1       # Turn on display
 crontab -l
 ```
 
-## Logs
-
-To view media sync logs:
+### View Media Sync Logs
 
 ```bash
 tail -f ~/feh_sync.log
 ```
+
