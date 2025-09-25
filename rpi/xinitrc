@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# =============================================================================
+# Kiosk Media Sync & Display Script - .xinitrc Configuration
+# -----------------------------------------------------------------------------
+# This script configures the kiosk environment for running the media sync and
+# display process upon starting the X session. It disables screen blanking, 
+# power-saving features, and ensures the continuous display of media content.
+#
+# Steps performed by this script:
+# 1. Disables screen saver, screen blanking, and power-saving features to
+#    ensure the display stays active and shows the media content.
+# 2. Sets the environment variable `RCLONE_REMOTE_PATH` to specify the remote
+#    path for media sync.
+# 3. Executes the kiosk media sync and slideshow script (`kiosk_client.sh`),
+#    which handles the syncing of media from a remote source and displays it
+#    in a slideshow using the 'feh' tool.
+#
+# Environment variables:
+# RCLONE_REMOTE_PATH - Specifies the remote path for syncing media via Rclone.
+#
+# Usage: This file is typically executed when X starts up, usually from the
+#        `~/.xinitrc` or a similar initialization file. This ensures the kiosk
+#        media sync and display script runs immediately upon starting the X session.
+#
+# Author: Lorenzo Pouw (2025)
+# Project: https://github.com/MonkeyEnterprise/kiosk-presenter
+# =============================================================================
+
+
+# Disable screen blanking and power-saving features to keep the display active.
+# These commands prevent the screen from going into standby or blanking out.
+xset s off        # Disable screen saver (no automatic screen lock or sleep)
+xset -dpms        # Disable DPMS (Energy Star) features (prevents monitor power-down)
+xset s noblank    # Disable screen blanking (prevents the screen from turning black)
+
+# Start the kiosk media script which handles media sync and displays the slideshow.
+# The 'exec' command replaces the current shell with the kiosk media script.
+
+exec /home/kiosk/core/kiosk_client.sh --remote_path $RCLONE_REMOTE_PATH

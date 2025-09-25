@@ -1,0 +1,25 @@
+# =============================================================================
+# Kiosk Autostart Script - .bash_profile Configuration
+# -----------------------------------------------------------------------------
+# This script is configured to automatically start the kiosk display application
+# upon user login, specifically designed for a kiosk environment. It ensures that
+# the graphical X session, along with the necessary media display and
+# synchronization processes, begins immediately after the user logs in via a
+# terminal.
+#
+# Usage: This file is executed when a user logs in to the system. It is a
+#        standard practice in kiosk systems to use this file to launch the
+#        graphical user interface (GUI) and other core applications
+#        automatically.
+#
+# Author: Lorenzo Pouw 2025
+# Project: https://github.com/MonkeyEnterprise/kiosk-presenter
+# =============================================================================
+
+# Start X automatically if a graphical session is not already running
+if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
+    while true; do
+        startx -- -nocursor
+        sleep 5
+    done
+fi
