@@ -5,6 +5,10 @@
 		}
 	],
 	"settings": {
+		"files.associations": {
+			"crontab": "shellscript",
+			".xinitrc": "shellscript"
+		},
 		"cSpell.ignoreWords": [
 			"xinitrc",
 			"xorg",
