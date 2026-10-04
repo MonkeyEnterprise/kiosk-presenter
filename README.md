@@ -86,7 +86,32 @@ The script includes an optional function to set up a Cloudflare Tunnel for secur
 5. Configures DNS routing and generates `/etc/cloudflared/config.yml`.
 6. Installs and enables Cloudflared as a systemd service.
 
-To reset or remove Cloudflared completely, the script includes a cleanup function that:
+`cloudflared tunnel route dns` only works for the domain selected during `cloudflared tunnel login`. For any other domain the script prints the CNAME record (`<tunnel-id>.cfargotunnel.com`, proxied) to add in the Cloudflare dashboard.
+
+### Adding or removing a hostname
+
+To move a device to a new domain without losing access, add the new hostname next to the old one, test it, then remove the old one:
+
+```bash
+./setup.sh add-hostname       # e.g. pi1.new-domain.com
+./setup.sh remove-hostname    # e.g. pi1.old-domain.com, once the new one works
+```
+
+Both commands back up `/etc/cloudflared/config.yml`, validate the new config (restoring the backup when it is invalid) and restart the tunnel. As a safety net the previous config is restored automatically after 5 minutes. Once you have logged in again through the new hostname, keep the change with:
+
+```bash
+sudo systemctl stop cf-rollback.timer
+```
+
+After removing a hostname, delete its DNS record in the Cloudflare dashboard.
+
+### Removing Cloudflared
+
+```bash
+./setup.sh cleanup-cloudflared
+```
+
+This removes Cloudflared completely, including the tunnel credentials, so remote access through the tunnel is lost:
 
 * Stops and disables all Cloudflared services.
 * Removes service and timer files.

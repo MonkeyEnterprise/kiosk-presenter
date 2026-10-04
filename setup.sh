@@ -206,11 +206,9 @@ prompt_cloudflared_setup() {
         read -p "Enter the domain name you want to use for the tunnel (e.g., example.com): " domain_name
 
         # DNS route
-        if ! cloudflared tunnel route dns "$tunnel_id" "$tunnel_name.$domain_name"; then
-            echo "cloudflared tunnel routing failed."
+        if ! route_dns "$tunnel_id" "$tunnel_name.$domain_name"; then
             return 1
         fi
-        echo "cloudflared tunnel '$tunnel_name' routed successfully to '$tunnel_name.$domain_name'."
 
         # ---- CONFIG in /etc/cloudflared ----
         config_dir="/etc/cloudflared"
@@ -286,12 +284,211 @@ cleanup_cloudflared() {
     echo "Cleanup complete. System is ready for a fresh cloudflared installation."
 }
 
+# Create the DNS record for a tunnel hostname.
+# 'cloudflared tunnel route dns' only works for the domain chosen during
+# 'cloudflared tunnel login' (the zone in cert.pem). For any other domain it
+# creates a wrong record such as 'pi1.new.com.old.app', so the CNAME has to
+# be added in the Cloudflare dashboard instead.
+route_dns() {
+    local tunnel_id="$1"
+    local hostname="$2"
+
+    read -p "Is the domain of '$hostname' the one you selected during 'cloudflared tunnel login'? (y/n) " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+        if ! cloudflared tunnel route dns "$tunnel_id" "$hostname"; then
+            echo "cloudflared tunnel routing failed."
+            return 1
+        fi
+        echo "Tunnel routed successfully to '$hostname'."
+    else
+        echo
+        echo "Add this DNS record in the Cloudflare dashboard (zone of '$hostname'):"
+        echo "  Type:   CNAME"
+        echo "  Name:   $hostname"
+        echo "  Target: $tunnel_id.cfargotunnel.com"
+        echo "  Proxy:  Proxied (orange cloud)"
+        echo
+        read -p "Press Enter when the record has been added... "
+    fi
+}
+
+# Restart cloudflared with a safety net: if the new config locks you out,
+# the previous config is restored automatically after 5 minutes.
+restart_cloudflared_with_rollback() {
+    local config_file="$1"
+    local backup_file="$2"
+
+    sudo systemctl stop cf-rollback.timer 2>/dev/null || true
+    sudo systemctl reset-failed cf-rollback.service 2>/dev/null || true
+    sudo systemd-run --quiet --unit=cf-rollback --on-active=5min \
+        /bin/sh -c "cp '$backup_file' '$config_file' && systemctl restart cloudflared"
+
+    echo
+    echo "Restarting cloudflared. An SSH session through the tunnel will drop now."
+    echo "The previous config is restored automatically in 5 minutes."
+    echo "After logging in again through the new hostname, keep the change with:"
+    echo "  sudo systemctl stop cf-rollback.timer"
+    echo
+    sudo systemctl restart cloudflared
+}
+
+# Validate the edited config; restore the backup when it is invalid.
+validate_cloudflared_config() {
+    local config_file="$1"
+    local backup_file="$2"
+
+    if ! sudo cloudflared tunnel --config "$config_file" ingress validate; then
+        echo "The new config is invalid, restoring the previous one."
+        sudo cp "$backup_file" "$config_file"
+        return 1
+    fi
+}
+
+read_hostname() {
+    local prompt="$1"
+    read -p "$prompt" hostname
+    if [[ ! "$hostname" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$ ]]; then
+        echo "Invalid hostname: '$hostname'"
+        return 1
+    fi
+}
+
+# Add an extra hostname to the existing tunnel (e.g. when moving to a new
+# domain). The existing hostnames keep working, so you can test the new one
+# before removing the old one.
+add_cloudflared_hostname() {
+    local config_file="/etc/cloudflared/config.yml"
+    local backup_file="$config_file.bak"
+
+    if [ ! -f "$config_file" ]; then
+        echo "$config_file not found. Set up cloudflared first."
+        return 1
+    fi
+
+    local tunnel_id
+    tunnel_id=$(sudo sed -n 's/^tunnel: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "$config_file")
+    if [ -z "$tunnel_id" ]; then
+        echo "Could not read the tunnel ID from $config_file."
+        return 1
+    fi
+
+    echo "Current hostnames:"
+    sudo grep 'hostname:' "$config_file" | grep -v '"\*"' | sed 's/^ *- hostname: */  /'
+
+    if ! sudo grep -qF 'hostname: "*"' "$config_file"; then
+        echo "Catch-all rule (hostname: \"*\") not found in $config_file."
+        return 1
+    fi
+
+    read_hostname "Enter the new hostname (e.g., pi1.example.com): " || return 1
+    if sudo grep -qF "hostname: \"$hostname\"" "$config_file"; then
+        echo "'$hostname' is already in $config_file."
+        return 1
+    fi
+
+    if ! route_dns "$tunnel_id" "$hostname"; then
+        return 1
+    fi
+
+    # Insert the new rule before the catch-all rule
+    sudo cp "$config_file" "$backup_file"
+    sudo awk -v host="$hostname" '
+        /^ *- hostname: "\*"/ && !done {
+            print "  - hostname: \"" host "\""
+            print "    service: ssh://localhost:22"
+            done = 1
+        }
+        { print }
+    ' "$backup_file" | sudo tee "$config_file" > /dev/null
+
+    validate_cloudflared_config "$config_file" "$backup_file" || return 1
+    echo "Added '$hostname' to $config_file."
+    restart_cloudflared_with_rollback "$config_file" "$backup_file"
+}
+
+# Remove a hostname from the tunnel (e.g. the old domain after a move).
+# Remove its DNS record in the Cloudflare dashboard afterwards.
+remove_cloudflared_hostname() {
+    local config_file="/etc/cloudflared/config.yml"
+    local backup_file="$config_file.bak"
+
+    if [ ! -f "$config_file" ]; then
+        echo "$config_file not found."
+        return 1
+    fi
+
+    echo "Current hostnames:"
+    sudo grep 'hostname:' "$config_file" | grep -v '"\*"' | sed 's/^ *- hostname: */  /'
+
+    read_hostname "Enter the hostname to remove: " || return 1
+    if ! sudo grep -qF "hostname: \"$hostname\"" "$config_file"; then
+        echo "'$hostname' is not in $config_file."
+        return 1
+    fi
+    if [ "$(sudo grep 'hostname:' "$config_file" | grep -vc '"\*"')" -le 1 ]; then
+        echo "'$hostname' is the last hostname; removing it would lock you out."
+        return 1
+    fi
+
+    # Drop the hostname line and the service line that follows it
+    sudo cp "$config_file" "$backup_file"
+    sudo awk -v host="$hostname" '
+        skip { skip = 0; next }
+        {
+            line = $0
+            sub(/^ +/, "", line)
+            sub(/ +$/, "", line)
+            if (line == "- hostname: \"" host "\"") { skip = 1; next }
+        }
+        { print }
+    ' "$backup_file" | sudo tee "$config_file" > /dev/null
+
+    validate_cloudflared_config "$config_file" "$backup_file" || return 1
+    echo "Removed '$hostname' from $config_file."
+    echo "Remember to delete its DNS record in the Cloudflare dashboard."
+    restart_cloudflared_with_rollback "$config_file" "$backup_file"
+}
+
+usage() {
+    echo "Usage: $0 [command]"
+    echo
+    echo "Without a command the full kiosk installation runs."
+    echo
+    echo "Commands:"
+    echo "  add-hostname         Add a hostname to the existing cloudflared tunnel"
+    echo "  remove-hostname      Remove a hostname from the cloudflared tunnel"
+    echo "  cleanup-cloudflared  Remove cloudflared completely (tunnel access is lost!)"
+}
+
 ### MAIN EXECUTION ###
-install_dependencies
-setup_media_directory
-configure_bash_profile
-create_xinitrc
-setup_crontab
-prompt_cloudflared_setup
-prompt_rclone_setup
-prompt_reboot
+case "${1:-}" in
+    "")
+        install_dependencies
+        setup_media_directory
+        configure_bash_profile
+        create_xinitrc
+        setup_crontab
+        prompt_cloudflared_setup
+        prompt_rclone_setup
+        prompt_reboot
+        ;;
+    add-hostname)
+        add_cloudflared_hostname
+        ;;
+    remove-hostname)
+        remove_cloudflared_hostname
+        ;;
+    cleanup-cloudflared)
+        read -p "This removes cloudflared and all tunnel credentials from this device. Continue? (y/n) " choice
+        if [[ "$choice" =~ ^[Yy]$ ]]; then
+            cleanup_cloudflared
+        fi
+        ;;
+    -h|--help|help)
+        usage
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac
