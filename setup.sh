@@ -250,7 +250,62 @@ EOF
         fi
         sudo systemctl enable cloudflared --now
         echo "cloudflared service installed and enabled successfully."
+
+        setup_cloudflared_update
     fi
+}
+
+# Update cloudflared nightly from root's crontab. If the tunnel does not come
+# back after an update, the previous binary is restored, so the device stays
+# reachable.
+setup_cloudflared_update() {
+    local update_script="/usr/local/bin/cloudflared-auto-update"
+    local log_file="/var/log/cloudflared-update.log"
+
+    echo "=== Setting up nightly cloudflared update in root's crontab ==="
+
+    cat <<EOF | sudo tee "$update_script" > /dev/null
+#!/bin/sh
+# Installed by kiosk-presenter setup.sh: updates cloudflared and rolls back
+# to the previous binary when the tunnel service does not come back.
+BIN=/usr/local/bin/cloudflared
+LOG=$log_file
+
+echo "\$(date): checking for cloudflared update (\$(\$BIN --version 2>&1 | head -n 1))" >> "\$LOG"
+cp "\$BIN" "\$BIN.bak"
+
+"\$BIN" update >> "\$LOG" 2>&1
+code=\$?
+
+# Exit code 11 means a new version was installed
+if [ "\$code" -ne 11 ]; then
+    rm -f "\$BIN.bak"
+    exit 0
+fi
+
+echo "\$(date): updated to \$(\$BIN --version 2>&1 | head -n 1), restarting tunnel" >> "\$LOG"
+systemctl restart cloudflared
+sleep 30
+
+if systemctl is-active --quiet cloudflared; then
+    echo "\$(date): tunnel running after update" >> "\$LOG"
+    rm -f "\$BIN.bak"
+else
+    echo "\$(date): tunnel not running after update, restoring previous version" >> "\$LOG"
+    mv "\$BIN.bak" "\$BIN"
+    systemctl restart cloudflared
+fi
+EOF
+    sudo chmod 755 "$update_script"
+
+    # One updater is enough: the cloudflared-update.timer from 'service install' is replaced by the cron job
+    sudo systemctl disable --now cloudflared-update.timer 2>/dev/null || true
+
+    # Replace any existing entry, then update every night at 04:00
+    (sudo crontab -l 2>/dev/null | grep -v "$update_script" || true
+     echo "0 4 * * * $update_script") | sudo crontab -
+
+    echo "cloudflared is updated nightly at 04:00 (log: $log_file)."
 }
 
 cleanup_cloudflared() {
@@ -268,6 +323,10 @@ cleanup_cloudflared() {
     # Reload systemd to apply changes
     sudo systemctl daemon-reload
     sudo systemctl reset-failed
+
+    # Remove the nightly update job
+    (sudo crontab -l 2>/dev/null | grep -v "cloudflared-auto-update" || true) | sudo crontab -
+    sudo rm -f /usr/local/bin/cloudflared-auto-update
 
     # Remove cloudflared binary
     if [ -f /usr/local/bin/cloudflared ]; then
@@ -457,6 +516,7 @@ usage() {
     echo "Commands:"
     echo "  add-hostname         Add a hostname to the existing cloudflared tunnel"
     echo "  remove-hostname      Remove a hostname from the cloudflared tunnel"
+    echo "  setup-update         Update cloudflared nightly (root crontab, 04:00)"
     echo "  cleanup-cloudflared  Remove cloudflared completely (tunnel access is lost!)"
 }
 
@@ -477,6 +537,9 @@ case "${1:-}" in
         ;;
     remove-hostname)
         remove_cloudflared_hostname
+        ;;
+    setup-update)
+        setup_cloudflared_update
         ;;
     cleanup-cloudflared)
         read -p "This removes cloudflared and all tunnel credentials from this device. Continue? (y/n) " choice

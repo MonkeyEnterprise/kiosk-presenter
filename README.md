@@ -105,6 +105,20 @@ sudo systemctl stop cf-rollback.timer
 
 After removing a hostname, delete its DNS record in the Cloudflare dashboard.
 
+### Automatic updates
+
+The setup installs a nightly update job (04:00, root's crontab) that runs `/usr/local/bin/cloudflared-auto-update`. It updates Cloudflared, restarts the tunnel and restores the previous binary if the tunnel does not come back. The job replaces the `cloudflared-update.timer` created by `cloudflared service install`. On a device that was set up earlier, enable it with:
+
+```bash
+./setup.sh setup-update
+```
+
+Update log:
+
+```bash
+tail -f /var/log/cloudflared-update.log
+```
+
 ### Removing Cloudflared
 
 ```bash
