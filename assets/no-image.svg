@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Placeholder shown by bin/kiosk_client.sh while there is no media yet.
+  kiosk_client.sh replaces width="1920" height="1080" with the screen size
+  and __DEVICE__ with the kiosk's hostname and IP address. The design is
+  16:9 and stays centered; the background extends far beyond it, so any
+  screen format is filled without black bars.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <radialGradient id="background" gradientUnits="userSpaceOnUse" cx="960" cy="470" r="1300">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#0b1120"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background, much larger than the design so it also fills portrait or 4:3 screens -->
+  <rect x="-10000" y="-10000" width="21920" height="21080" fill="url(#background)"/>
+
+  <!-- Picture icon -->
+  <g transform="translate(960 390)" fill="none" stroke="#64748b" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="-150" y="-110" width="300" height="220" rx="28"/>
+    <circle cx="62" cy="-38" r="26"/>
+    <path d="M -150 72 L -58 -18 L 22 62 L 66 22 L 150 76"/>
+  </g>
+
+  <!-- Text -->
+  <g font-family="DejaVu Sans, Helvetica, Arial, sans-serif" text-anchor="middle">
+    <text x="960" y="640" font-size="68" fill="#e2e8f0">No images yet</text>
+    <text x="960" y="712" font-size="32" fill="#94a3b8">The slideshow starts as soon as images are added to the linked folder.</text>
+    <text x="960" y="1010" font-size="26" fill="#64748b">__DEVICE__</text>
+  </g>
+</svg>

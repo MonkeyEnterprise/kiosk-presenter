@@ -44,7 +44,8 @@ DIR="${KIOSK_MEDIA_DIR:-$HOME/media}"           # Media directory
 LOG_DIR="${KIOSK_LOG_DIR:-$HOME/logs}"          # Logs and hash cache
 LOG="$LOG_DIR/kiosk_client.log"                 # Log file
 CACHE="$LOG_DIR/.cache"                         # Cache file for hash
-PLACEHOLDER="$REPO_DIR/assets/no-image.png"     # Shown while the media directory is empty
+PLACEHOLDER_SVG="$REPO_DIR/assets/no-image.svg" # Shown while the media directory is empty
+PLACEHOLDER="$LOG_DIR/placeholder.svg"          # The placeholder, sized for this screen
 REMOTE="kiosk-dropbox:/"                        # Default remote path
 TIMER="${KIOSK_SYNC_INTERVAL:-300}"             # Sync interval (seconds)
 
@@ -102,12 +103,34 @@ sync_media() {
     fi
 }
 
+# Hostname and IP address shown on the placeholder, e.g. "kiosk1 · 192.168.1.23"
+device_info() {
+    local ip
+    ip=$(hostname -I 2> /dev/null | awk '{print $1}')
+    echo "$(hostname) · ${ip:-no network}"
+}
+
+# Write the placeholder with the screen's size and the device info. feh
+# renders an SVG at the size in the file, so this keeps it sharp, and the
+# SVG's background fills any screen format.
+render_placeholder() {
+    local size width height
+    size=$(xrandr --current 2> /dev/null | sed -n 's/.*current \([0-9]*\) x \([0-9]*\).*/\1 \2/p' | head -n 1)
+    read -r width height <<< "${size:-1920 1080}"
+    SHOWN_DEVICE_INFO=$(device_info)
+    sed -e "s/width=\"1920\" height=\"1080\"/width=\"$width\" height=\"$height\"/" \
+        -e "s/__DEVICE__/$SHOWN_DEVICE_INFO/" \
+        "$PLACEHOLDER_SVG" > "$PLACEHOLDER"
+    log "Placeholder rendered for a ${width}x${height} screen ($SHOWN_DEVICE_INFO)."
+}
+
 # Start feh slideshow (runs in background). If there is no media yet (e.g. a
 # new kiosk without a successful sync), show the placeholder instead, since
 # feh exits immediately on an empty directory.
 start_feh() {
     if [ -z "$(ls -A "$DIR")" ]; then
         log "No media in $DIR. Showing placeholder."
+        render_placeholder
         feh -Y -x -q -B black -F -Z "$PLACEHOLDER" &
     else
         log "Starting feh slideshow"
@@ -139,6 +162,16 @@ check_changes() {
         start_feh                      # Restart feh
     else
         log "No changes detected."
+
+        # Update a shown placeholder when the IP address changed, e.g. because
+        # the network only came up after X started
+        if [ -n "$SHOWN_DEVICE_INFO" ] && [ -z "$(ls -A "$DIR")" ] \
+            && [ "$(device_info)" != "$SHOWN_DEVICE_INFO" ]; then
+            log "Hostname or IP address changed. Updating placeholder."
+            pkill -x feh
+            sleep 1
+            start_feh
+        fi
     fi
 
     # If feh isn't running, start it

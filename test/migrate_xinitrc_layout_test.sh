@@ -30,8 +30,8 @@ backup_dirs() {
 cp -a /repo "$REPO"
 
 mkdir -p "$HOME/media/feh"
-cp /repo/assets/no-image.png "$HOME/media/feh/no-image.png"
-cp /repo/assets/no-image.png "$HOME/media/feh/poster.png"
+cp /repo/test/fixtures/image.png "$HOME/media/feh/no-image.png"
+cp /repo/test/fixtures/image.png "$HOME/media/feh/poster.png"
 echo "somehash" > "$HOME/media/feh/.last_hash"
 echo "old sync log line" > "$HOME/feh_sync.log"
 cat > "$HOME/.xinitrc" <<'EOF'
