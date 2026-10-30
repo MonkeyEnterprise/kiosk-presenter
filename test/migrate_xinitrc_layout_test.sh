@@ -43,6 +43,8 @@ EOF
 printf '# user stuff\n\n# Start X automatically if not already running\nstartx\n' > "$HOME/.bash_profile"
 printf '#!/bin/bash\necho old tv-power\n' | sudo tee /usr/local/bin/tv-power > /dev/null
 sudo chmod 755 /usr/local/bin/tv-power
+printf '#!/bin/sh\n' | sudo tee /usr/local/bin/cloudflared > /dev/null
+sudo chown kiosk:kiosk /usr/local/bin/cloudflared
 crontab - <<'EOF'
 0 3 * * * /usr/bin/true
 0 6 * * 1-5 /usr/local/bin/tv-power on >/dev/null 2>&1
@@ -74,6 +76,7 @@ check '[ "$(crontab -l | grep -cF "$TV_POWER")" -eq 8 ]' "8 cron jobs call the r
 check '! crontab -l | grep -qF "/usr/local/bin/tv-power"' "no cron jobs call the old tv-power copy"
 check 'crontab -l | grep -qF "/usr/bin/true"' "unrelated cron job kept"
 check 'grep -qF "/usr/local/bin/tv-power on" "$BACKUP/crontab"' "old crontab in the backup"
+check '[ "$(stat -c %U:%G /usr/local/bin/cloudflared)" == "root:root" ]' "cloudflared binary owned by root"
 
 echo "== Second run on the migrated kiosk"
 sleep 1   # A new backup directory would get a different timestamp

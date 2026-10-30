@@ -24,9 +24,12 @@
 # 4. Replaces ~/.xinitrc and ~/.bash_profile with links to the repository.
 # 5. Links /usr/local/bin/tv-power to the repository and replaces the TV power
 #    cron jobs.
+# 6. Makes /usr/local/bin/cloudflared owned by root again (older setups left
+#    it owned by the kiosk user, while root runs it).
 #
 # Everything that is replaced is kept in ~/kiosk-backup-<date>. Running the
-# script again on a migrated kiosk changes nothing. Cloudflared is left alone.
+# script again on a migrated kiosk changes nothing. The tunnel configuration
+# is left alone.
 #
 # Usage:
 # - Clone the repository to ~/kiosk-presenter as the kiosk user, run
@@ -147,6 +150,16 @@ migrate_crontab() {
     install_crontab
 }
 
+# Root runs cloudflared (service and nightly update), so the kiosk user must
+# not own the binary
+fix_cloudflared_owner() {
+    local bin="/usr/local/bin/cloudflared"
+    if [ -f "$bin" ] && [ "$(stat -c %u "$bin")" != "0" ]; then
+        sudo chown root:root "$bin"
+        log "$bin is now owned by root."
+    fi
+}
+
 check_remote_path() {
     local remote_path
     remote_path=$(sed -n "s/^export RCLONE_REMOTE_PATH='\{0,1\}\([^']*\)'\{0,1\}$/\1/p" "$BASHRC_FILE" 2>/dev/null | tail -n 1)
@@ -165,6 +178,7 @@ migrate_logs
 migrate_dotfiles
 install_tv_power
 migrate_crontab
+fix_cloudflared_owner
 check_remote_path
 
 [ -d "$BACKUP" ] && log "Backup of the old files: $BACKUP"

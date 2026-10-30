@@ -214,8 +214,10 @@ prompt_cloudflared_setup() {
             echo "Failed to download cloudflared."
             return 1
         fi
-        sudo mv cloudflared /usr/local/bin/
-        sudo chmod +x /usr/local/bin/cloudflared
+        # Owned by root: root runs it (service and nightly update), so the kiosk
+        # user must not be able to replace it
+        sudo install -m 755 -o root -g root cloudflared /usr/local/bin/cloudflared
+        rm -f cloudflared
 
         # Verify install
         if ! cloudflared --version > /dev/null 2>&1; then
