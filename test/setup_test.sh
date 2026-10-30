@@ -34,7 +34,9 @@ check '[ $rc -ne 0 ] && grep -q "must be at $REPO" /tmp/out' "refuses to run fro
 echo "== Crontab"
 echo "0 3 * * * /usr/bin/true" | crontab -
 bash -c "source $REPO/setup.sh && install_crontab && install_crontab" > /dev/null
-check '[ "$(crontab -l | grep -c "$REPO/bin/tv-power")" -eq 8 ]' "schedule installed once after two runs"
+check '[ "$(crontab -l | grep -c "$REPO/bin/tv-power")" -eq 10 ]' "schedule installed once after two runs"
+check 'crontab -l | grep -qxF "0 18 * * 6 $REPO/bin/tv-power on >/dev/null 2>&1"' "default schedule includes Saturday"
+check '! crontab -l | grep -q "^[[:space:]]*$"' "no blank lines in the crontab"
 check '! crontab -l | grep -q -e "__BIN__" -e "^#"' "placeholders and comments filled in or left out"
 check 'crontab -l | grep -qF "/usr/bin/true"' "unrelated cron job kept"
 

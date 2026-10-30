@@ -1,10 +1,23 @@
 # Display power schedule, installed in the kiosk user's crontab by setup.sh.
-# __BIN__ is replaced with the repository's bin/ directory.
+# __BIN__ is replaced with the repository's bin/ directory. A kiosk with a
+# schedule of its own uses ~/tv-power.cron instead.
+#
+# This is the schedule of the Amersfoort kiosks (kiosk1 to kiosk4).
+
+# Monday to Friday: 06:00 - 09:00
 0 6 * * 1-5 __BIN__/tv-power on >/dev/null 2>&1
 0 9 * * 1-5 __BIN__/tv-power off >/dev/null 2>&1
+
+# Wednesday: 18:30 - 21:30
 30 18 * * 3 __BIN__/tv-power on >/dev/null 2>&1
-0 20 * * 3 __BIN__/tv-power off >/dev/null 2>&1
-0 9 * * 7 __BIN__/tv-power on >/dev/null 2>&1
-30 13 * * 7 __BIN__/tv-power off >/dev/null 2>&1
-0 17 * * 7 __BIN__/tv-power on >/dev/null 2>&1
-30 19 * * 7 __BIN__/tv-power off >/dev/null 2>&1
+30 21 * * 3 __BIN__/tv-power off >/dev/null 2>&1
+
+# Saturday: 18:00 - 21:00
+0 18 * * 6 __BIN__/tv-power on >/dev/null 2>&1
+0 21 * * 6 __BIN__/tv-power off >/dev/null 2>&1
+
+# Sunday: 09:00 - 13:30 and 17:00 - 21:00
+0 9 * * 0 __BIN__/tv-power on >/dev/null 2>&1
+30 13 * * 0 __BIN__/tv-power off >/dev/null 2>&1
+0 17 * * 0 __BIN__/tv-power on >/dev/null 2>&1
+0 21 * * 0 __BIN__/tv-power off >/dev/null 2>&1

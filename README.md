@@ -46,7 +46,7 @@ The repository must be at `~/kiosk-presenter`. To update a kiosk later, run `git
 | `bin/cloudflared-auto-update` | Nightly cloudflared update, copied to `/usr/local/bin` |
 | `bin/update-cloudflared-containers.sh` | Updates cloudflared Docker containers (for Docker hosts) |
 | `dotfiles/` | `bash_profile` and `xinitrc`, linked to `~/.bash_profile` and `~/.xinitrc` |
-| `config/tv-power.cron` | Display power schedule, installed in the crontab |
+| `config/tv-power.cron` | Default display power schedule (the Amersfoort kiosks' schedule), installed in the crontab |
 | `config/cloudflared-config.yml` | Template for `/etc/cloudflared/config.yml` |
 | `config/logrotate.conf` | Template for `/etc/logrotate.d/kiosk-presenter` |
 | `assets/no-image.svg` | Shown while there is no media yet, with the kiosk's hostname and IP address; fills any screen format |
