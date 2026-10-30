@@ -72,7 +72,8 @@ check 'grep -q "REMOTE_PATH=" "$BACKUP/.xinitrc.bak"' "old .xinitrc in the backu
 check 'grep -q "user stuff" "$BACKUP/.bash_profile.bak"' "old .bash_profile in the backup"
 
 check '[ "$(readlink /usr/local/bin/tv-power)" == "$TV_POWER" ]' "/usr/local/bin/tv-power links to the repository"
-check '[ "$(crontab -l | grep -cF "$TV_POWER")" -eq 8 ]' "8 cron jobs call the repository's tv-power"
+check '[ "$(crontab -l | grep -cF "$TV_POWER")" -eq 2 ]' "the kiosk's 2 old jobs now call the repository's tv-power"
+check 'crontab -l | grep -qxF "0 9 * * 1-5 $TV_POWER off >/dev/null 2>&1"' "their times are kept"
 check '! crontab -l | grep -qF "/usr/local/bin/tv-power"' "no cron jobs call the old tv-power copy"
 check 'crontab -l | grep -qF "/usr/bin/true"' "unrelated cron job kept"
 check 'grep -qF "/usr/local/bin/tv-power on" "$BACKUP/crontab"' "old crontab in the backup"
@@ -84,7 +85,7 @@ sleep 1   # A new backup directory would get a different timestamp
 check '[ $rc -eq 0 ]' "exits successfully"
 check '[ "$(backup_dirs)" == "$BACKUP" ]' "creates no new backup"
 check '[ "$(grep -c "^export RCLONE_REMOTE_PATH=" "$HOME/.bashrc")" -eq 1 ]' "RCLONE_REMOTE_PATH not duplicated"
-check '[ "$(crontab -l | grep -cF "$TV_POWER")" -eq 8 ]' "cron jobs not duplicated"
+check '[ "$(crontab -l | grep -cF "$TV_POWER")" -eq 2 ]' "cron jobs not duplicated"
 
 echo "== Warns about the example remote path"
 sed -i "s|^export RCLONE_REMOTE_PATH=.*|export RCLONE_REMOTE_PATH='dropbox_kiosk:/path'|" "$HOME/.bashrc"

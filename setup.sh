@@ -133,15 +133,30 @@ install_tv_power() {
     log "/usr/local/bin/tv-power now links to $REPO_DIR/bin/tv-power"
 }
 
-# Install the display power schedule from config/tv-power.cron. Existing TV
-# power entries (tv-power, and cec_client.sh from older installs) are
-# replaced, other cron jobs are kept.
+# Display power schedule of this kiosk: ~/tv-power.cron when it exists (a
+# schedule of its own, e.g. taken over by migrate.sh), else the default
+# config/tv-power.cron
+KIOSK_SCHEDULE="$HOME/tv-power.cron"
+
+tv_power_schedule() {
+    if [ -f "$KIOSK_SCHEDULE" ]; then
+        echo "$KIOSK_SCHEDULE"
+    else
+        echo "$REPO_DIR/config/tv-power.cron"
+    fi
+}
+
+# Install the display power schedule. Existing TV power entries (tv-power,
+# and cec_client.sh from older installs) are replaced, other cron jobs are
+# kept.
 install_crontab() {
+    local schedule
+    schedule=$(tv_power_schedule)
     crontab -l 2>/dev/null | grep -v -e 'cec[-_]client\.sh' -e 'tv-power' | {
         cat
-        sed -e '/^#/d' -e "s|__BIN__|$REPO_DIR/bin|g" "$REPO_DIR/config/tv-power.cron"
+        sed -e '/^#/d' -e "s|__BIN__|$REPO_DIR/bin|g" "$schedule"
     } | crontab -
-    log "TV power schedule installed in crontab."
+    log "TV power schedule from $schedule installed in crontab."
 }
 
 # =============================================================================

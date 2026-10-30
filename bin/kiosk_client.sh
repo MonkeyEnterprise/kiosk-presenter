@@ -124,12 +124,19 @@ render_placeholder() {
     log "Placeholder rendered for a ${width}x${height} screen ($SHOWN_DEVICE_INFO)."
 }
 
-# Start feh slideshow (runs in background). If there is no media yet (e.g. a
-# new kiosk without a successful sync), show the placeholder instead, since
-# feh exits immediately on an empty directory.
+# Whether the media directory holds at least one image feh can show
+has_images() {
+    [ -n "$(find "$DIR" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' \
+        -o -iname '*.png' -o -iname '*.gif' -o -iname '*.bmp' -o -iname '*.webp' \
+        -o -iname '*.svg' -o -iname '*.tif' -o -iname '*.tiff' \) -print -quit)" ]
+}
+
+# Start feh slideshow (runs in background). If there are no images yet (e.g. a
+# new kiosk without a successful sync, or a remote with only other files),
+# show the placeholder instead, since feh exits immediately without images.
 start_feh() {
-    if [ -z "$(ls -A "$DIR")" ]; then
-        log "No media in $DIR. Showing placeholder."
+    if ! has_images; then
+        log "No images in $DIR. Showing placeholder."
         render_placeholder
         feh -Y -x -q -B black -F -Z "$PLACEHOLDER" &
     else
@@ -165,7 +172,7 @@ check_changes() {
 
         # Update a shown placeholder when the IP address changed, e.g. because
         # the network only came up after X started
-        if [ -n "$SHOWN_DEVICE_INFO" ] && [ -z "$(ls -A "$DIR")" ] \
+        if [ -n "$SHOWN_DEVICE_INFO" ] && ! has_images \
             && [ "$(device_info)" != "$SHOWN_DEVICE_INFO" ]; then
             log "Hostname or IP address changed. Updating placeholder."
             pkill -x feh

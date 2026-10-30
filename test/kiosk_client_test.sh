@@ -108,6 +108,12 @@ rm "$REMOTE"/*.png; sleep 5
 check '[ -z "$(ls -A "$MEDIA")" ]' "media directory is empty"
 check '[[ "$(feh_args)" == *placeholder.svg* ]]' "feh switches to the placeholder"
 
+echo "== Remote with files, but no images"
+echo "not an image" > "$REMOTE/Vault.dbx-vault"; sleep 5
+check '[ -f "$MEDIA/Vault.dbx-vault" ]' "file is synced"
+check '[[ "$(feh_args)" == *placeholder.svg* ]]' "feh shows the placeholder instead of a black screen"
+rm "$REMOTE/Vault.dbx-vault"
+
 echo "== Media arrives on a kiosk showing the placeholder"
 cp "$IMG" "$REMOTE/e.png"; sleep 5
 check '[[ "$(feh_args)" == *"$MEDIA" ]]' "feh switches back to the slideshow"

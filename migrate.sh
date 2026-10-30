@@ -13,17 +13,21 @@
 # - xinitrc layout: the whole sync loop in ~/.xinitrc (with REMOTE_PATH in
 #   it), media in ~/media/feh, log in ~/feh_sync.log, a copy of tv-power in
 #   /usr/local/bin.
-# - core layout: scripts, logs and cache in ~/core, media in ~/feh,
-#   RCLONE_REMOTE_PATH in ~/.bashrc, cron jobs calling ~/core/cec-client.sh.
+# - core layout: scripts, logs and cache in ~/core, media in ~/feh, cron
+#   jobs calling ~/core/cec_client.sh (or cec-client.sh). The remote is
+#   either RCLONE_REMOTE_PATH in ~/.bashrc or written out in ~/.xinitrc as
+#   --remote_path "remote:path".
 #
 # Steps performed by this script:
-# 1. Moves REMOTE_PATH from an old ~/.xinitrc to RCLONE_REMOTE_PATH in
-#    ~/.bashrc.
+# 1. Moves the remote from an old ~/.xinitrc (REMOTE_PATH="..." or
+#    --remote_path "...") to RCLONE_REMOTE_PATH in ~/.bashrc.
 # 2. Moves the media to ~/media, so it doesn't have to be downloaded again.
 # 3. Moves the logs to ~/logs and ~/core to the backup directory.
 # 4. Replaces ~/.xinitrc and ~/.bash_profile with links to the repository.
 # 5. Links /usr/local/bin/tv-power to the repository and replaces the TV power
-#    cron jobs.
+#    cron jobs. The kiosk keeps its own schedule: the times of its old jobs
+#    are written to ~/tv-power.cron, which setup.sh then uses instead of the
+#    default config/tv-power.cron.
 # 6. Makes /usr/local/bin/cloudflared owned by root again (older setups left
 #    it owned by the kiosk user, while root runs it).
 #
@@ -59,8 +63,9 @@ backup() {
     log "Moved $1 to $BACKUP/"
 }
 
-# The xinitrc layout kept the remote in ~/.xinitrc; the current dotfiles read
-# RCLONE_REMOTE_PATH from ~/.bashrc instead
+# Older layouts kept the remote in ~/.xinitrc, as REMOTE_PATH="..." (xinitrc
+# layout) or as --remote_path "..." on the exec line (some core layout
+# kiosks); the current dotfiles read RCLONE_REMOTE_PATH from ~/.bashrc instead
 migrate_remote_path() {
     if [ -L "$HOME/.xinitrc" ] || [ ! -f "$HOME/.xinitrc" ]; then
         return 0
@@ -69,11 +74,18 @@ migrate_remote_path() {
     local remote_path
     remote_path=$(sed -n 's/^REMOTE_PATH="\(.*\)"$/\1/p' "$HOME/.xinitrc" | head -n 1)
     if [ -z "$remote_path" ]; then
+        # Quoted ("remote:My Folder") or not; a variable such as
+        # "$RCLONE_REMOTE_PATH" is skipped, that one is already in ~/.bashrc
+        remote_path=$(grep -v '^\s*#' "$HOME/.xinitrc" | sed -n \
+            -e 's/.*--remote_path[ =]"\([^"$][^"]*\)".*/\1/p' \
+            -e 's/.*--remote_path[ =]\([^"$ ][^ ]*\).*/\1/p' | head -n 1)
+    fi
+    if [ -z "$remote_path" ]; then
         return 0
     fi
 
     if grep -q '^export RCLONE_REMOTE_PATH=' "$BASHRC_FILE" 2>/dev/null; then
-        log "RCLONE_REMOTE_PATH is already set in $BASHRC_FILE, ignoring REMOTE_PATH=$remote_path from ~/.xinitrc."
+        log "RCLONE_REMOTE_PATH is already set in $BASHRC_FILE, ignoring $remote_path from ~/.xinitrc."
     else
         save_remote_path "$remote_path"
     fi
@@ -138,6 +150,38 @@ migrate_dotfiles() {
     done
 }
 
+# Write the times of the old TV power jobs to ~/tv-power.cron, so the kiosk
+# keeps its own schedule. "on 0" and "on" become 'tv-power on', "standby 0"
+# and "off" become 'tv-power off'.
+save_old_schedule() {
+    local current="$1"
+    if [ -f "$KIOSK_SCHEDULE" ]; then
+        log "$KIOSK_SCHEDULE already exists, keeping it."
+        return 0
+    fi
+
+    local jobs
+    jobs=$(echo "$current" | grep -v '^\s*#' | grep -e 'cec[-_]client\.sh' -e 'tv-power' | awk '
+        {
+            schedule = $1 " " $2 " " $3 " " $4 " " $5
+            if ($0 ~ /standby|tv-power off/) action = "off"
+            else if ($0 ~ /"on|tv-power on/) action = "on"
+            else next
+            print schedule " __BIN__/tv-power " action " >/dev/null 2>&1"
+        }')
+    if [ -z "$jobs" ]; then
+        return 0
+    fi
+
+    {
+        echo "# Display power schedule of this kiosk, taken over from its old crontab by"
+        echo "# migrate.sh. setup.sh uses this file instead of config/tv-power.cron."
+        echo "# __BIN__ is replaced with the repository's bin/ directory."
+        echo "$jobs"
+    } > "$KIOSK_SCHEDULE"
+    log "Kept this kiosk's schedule ($(echo "$jobs" | wc -l | tr -d " ") jobs) in $KIOSK_SCHEDULE"
+}
+
 migrate_crontab() {
     local current
     current=$(crontab -l 2>/dev/null)
@@ -146,6 +190,11 @@ migrate_crontab() {
         mkdir -p "$BACKUP"
         echo "$current" > "$BACKUP/crontab"
         log "Backed up crontab to $BACKUP/crontab"
+        save_old_schedule "$current"
+
+        # Drop the comments of the old crontab: they describe the old TV jobs.
+        # The full old crontab is in the backup.
+        echo "$current" | grep -v -e '^\s*#' -e '^+#' -e '^\s*$' | crontab -
     fi
     install_crontab
 }
