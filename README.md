@@ -58,7 +58,8 @@ On the kiosk:
 |---|---|
 | `~/kiosk-presenter` | This repository |
 | `~/media` | Media synced from the cloud. Anything not on the remote is deleted. |
-| `~/logs` | `kiosk_client.log`, `cec_client.log` and the hash cache. Rotated weekly, or above 5 MB; 4 compressed old logs are kept (`/etc/logrotate.d/kiosk-presenter`) |
+| `/var/log/kiosk-presenter` | `kiosk_client.log` and `cec_client.log`. Rotated weekly, or above 5 MB; 4 compressed old logs are kept (`/etc/logrotate.d/kiosk-presenter`) |
+| `~/.cache/kiosk-presenter` | Hash of the media and the placeholder sized for the screen |
 | `/usr/local/bin/tv-power` | Link to `bin/tv-power` |
 
 ---
@@ -239,7 +240,7 @@ tv-power on                               # Turn on display and switch it to the
 ~/kiosk-presenter/bin/cec_client.sh --as  # Only switch the TV to the Pi
 ```
 
-`~/logs/cec_client.log` shows which HDMI port sees the TV and what was sent.
+`/var/log/kiosk-presenter/cec_client.log` shows which HDMI port sees the TV and what was sent.
 
 On TCL TVs, enable **T-Link**, **auto power on** and **quick start / instant power on**. Without quick start the TV ignores CEC while in standby.
 
@@ -252,8 +253,8 @@ crontab -l
 ### View Logs
 
 ```bash
-tail -f ~/logs/kiosk_client.log   # sync and slideshow
-tail -f ~/logs/cec_client.log     # display power
+tail -f /var/log/kiosk-presenter/kiosk_client.log   # sync and slideshow
+tail -f /var/log/kiosk-presenter/cec_client.log     # display power
 ```
 
 ---

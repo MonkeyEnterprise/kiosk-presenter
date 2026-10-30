@@ -133,11 +133,20 @@ install_tv_power() {
     log "/usr/local/bin/tv-power now links to $REPO_DIR/bin/tv-power"
 }
 
-# Rotate the logs in ~/logs, so they don't fill the SD card. logrotate runs
-# as root, so the config is a root-owned copy in /etc/logrotate.d.
+# Log directory of the scripts in bin/, owned by the kiosk user because the
+# scripts run as that user
+KIOSK_LOG_DIR_DEFAULT="/var/log/kiosk-presenter"
+
+install_log_dir() {
+    sudo install -d -o "$(id -un)" -g "$(id -gn)" -m 755 "$KIOSK_LOG_DIR_DEFAULT"
+    log "Log directory: $KIOSK_LOG_DIR_DEFAULT"
+}
+
+# Rotate the logs, so they don't fill the SD card. logrotate runs as root, so
+# the config is a root-owned copy in /etc/logrotate.d.
 install_logrotate() {
     local dest="/etc/logrotate.d/kiosk-presenter"
-    sed -e "s|__LOGS__|$HOME/logs|g" -e "s|__USER__|$(id -un)|g" -e "s|__GROUP__|$(id -gn)|g" \
+    sed -e "s|__LOGS__|$KIOSK_LOG_DIR_DEFAULT|g" -e "s|__USER__|$(id -un)|g" -e "s|__GROUP__|$(id -gn)|g" \
         "$REPO_DIR/config/logrotate.conf" | sudo tee "$dest" > /dev/null
     sudo chmod 644 "$dest"
     log "Log rotation installed in $dest"
@@ -570,6 +579,7 @@ main() {
             install_dotfiles
             install_tv_power
             install_crontab
+            install_log_dir
             install_logrotate
             prompt_cloudflared_setup
             prompt_rclone_setup

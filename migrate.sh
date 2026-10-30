@@ -5,9 +5,10 @@
 # -----------------------------------------------------------------------------
 # Moves a kiosk from one of the older layouts to the current one:
 #
-#   ~/kiosk-presenter   git clone of this repository
-#   ~/media             synced media
-#   ~/logs              logs and hash cache
+#   ~/kiosk-presenter         git clone of this repository
+#   ~/media                   synced media
+#   /var/log/kiosk-presenter  logs
+#   ~/.cache/kiosk-presenter  hash cache and placeholder
 #
 # Older layouts it recognizes:
 # - xinitrc layout: the whole sync loop in ~/.xinitrc (with REMOTE_PATH in
@@ -17,18 +18,20 @@
 #   jobs calling ~/core/cec_client.sh (or cec-client.sh). The remote is
 #   either RCLONE_REMOTE_PATH in ~/.bashrc or written out in ~/.xinitrc as
 #   --remote_path "remote:path".
+# - logs in ~/logs: the current layout before the logs moved to /var/log.
 #
 # Steps performed by this script:
 # 1. Moves the remote from an old ~/.xinitrc (REMOTE_PATH="..." or
 #    --remote_path "...") to RCLONE_REMOTE_PATH in ~/.bashrc.
 # 2. Moves the media to ~/media, so it doesn't have to be downloaded again.
-# 3. Moves the logs to ~/logs and ~/core to the backup directory.
+# 3. Moves the logs from ~/core or ~/logs to /var/log/kiosk-presenter, and
+#    ~/core to the backup directory.
 # 4. Replaces ~/.xinitrc and ~/.bash_profile with links to the repository.
 # 5. Links /usr/local/bin/tv-power to the repository and replaces the TV power
 #    cron jobs. The kiosk keeps its own schedule: the times of its old jobs
 #    are written to ~/tv-power.cron, which setup.sh then uses instead of the
 #    default config/tv-power.cron.
-# 6. Installs log rotation for ~/logs (/etc/logrotate.d/kiosk-presenter).
+# 6. Installs log rotation (/etc/logrotate.d/kiosk-presenter).
 # 7. Makes /usr/local/bin/cloudflared owned by root again (older setups left
 #    it owned by the kiosk user, while root runs it).
 #
@@ -53,7 +56,7 @@ OLD_MEDIA="$HOME/feh"
 OLD_XINITRC_MEDIA="$HOME/media/feh"
 OLD_XINITRC_LOG="$HOME/feh_sync.log"
 MEDIA="$HOME/media"
-LOGS="$HOME/logs"
+OLD_LOGS="$HOME/logs"
 BACKUP="$HOME/kiosk-backup-$(date "+%Y%m%d-%H%M%S")"
 
 # Create the backup directory on first use, so a run with nothing to back up
@@ -94,7 +97,7 @@ migrate_remote_path() {
 
 migrate_media() {
     if [ -d "$OLD_XINITRC_MEDIA" ]; then
-        # The hash file is recreated by kiosk_client.sh in ~/logs
+        # The hash file is recreated by kiosk_client.sh
         rm -f "$OLD_XINITRC_MEDIA/.last_hash"
         local file
         for file in "$OLD_XINITRC_MEDIA"/* "$OLD_XINITRC_MEDIA"/.[!.]*; do
@@ -121,23 +124,33 @@ migrate_logs() {
         backup "$OLD_XINITRC_LOG"
     fi
 
-    if [ ! -d "$OLD_CORE" ]; then
-        return 0
-    fi
+    install_log_dir
 
-    mkdir -p "$LOGS"
-    local logfile
-    for logfile in "$OLD_CORE"/*.log; do
-        [ -f "$logfile" ] || continue
-        cat "$logfile" >> "$LOGS/$(basename "$logfile")"
-        rm "$logfile"
-        log "Moved $logfile to $LOGS/"
+    # Logs from ~/core (core layout) or ~/logs (before /var/log). Current logs
+    # are appended, rotated ones (.log.1, .log.2.gz) moved unless already there.
+    local dir file
+    for dir in "$OLD_CORE" "$OLD_LOGS"; do
+        [ -d "$dir" ] || continue
+        for file in "$dir"/*.log "$dir"/*.log.*; do
+            [ -f "$file" ] || continue
+            if [[ "$file" == *.log ]]; then
+                cat "$file" >> "$KIOSK_LOG_DIR_DEFAULT/$(basename "$file")" && rm "$file"
+            else
+                mv -n "$file" "$KIOSK_LOG_DIR_DEFAULT/"
+            fi
+            log "Moved $file to $KIOSK_LOG_DIR_DEFAULT/"
+        done
+
+        # The hash cache and the placeholder are recreated by kiosk_client.sh
+        rm -f "$dir/.cache" "$dir/placeholder.svg"
     done
 
-    # The hash cache is recreated by kiosk_client.sh
-    rm -f "$OLD_CORE/.cache"
-
-    backup "$OLD_CORE"
+    if [ -d "$OLD_CORE" ]; then
+        backup "$OLD_CORE"
+    fi
+    if [ -d "$OLD_LOGS" ]; then
+        rmdir "$OLD_LOGS" 2> /dev/null || backup "$OLD_LOGS"
+    fi
 }
 
 migrate_dotfiles() {
