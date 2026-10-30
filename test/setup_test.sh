@@ -55,6 +55,18 @@ check '[ "$(sudo crontab -l | grep -c "cloudflared-auto-update")" -eq 1 ]' "one 
 check 'sudo crontab -l | grep -qF "/usr/bin/true"' "unrelated root cron job kept"
 check '[ "$(stat -c %U /usr/local/bin/cloudflared-auto-update)" == "root" ]' "update script installed, owned by root"
 
+echo "== Log rotation"
+bash -c "source $REPO/setup.sh && install_logrotate" > /dev/null
+CONF=/etc/logrotate.d/kiosk-presenter
+check '[ "$(stat -c "%U %a" $CONF)" == "root 644" ]' "config installed, owned by root"
+check 'grep -qF "$HOME/logs/*.log {" $CONF && grep -qF "su $(id -un) $(id -gn)" $CONF && ! grep -q "__" $CONF' "placeholders filled in"
+mkdir -p "$HOME/logs"
+head -c 6000000 /dev/zero | tr "\0" "x" | fold -w 100 > "$HOME/logs/kiosk_client.log"
+sudo logrotate -s /tmp/logrotate.state $CONF; rc=$?
+check '[ $rc -eq 0 ]' "logrotate accepts the config"
+check '[ -f "$HOME/logs/kiosk_client.log.1" ] && [ ! -s "$HOME/logs/kiosk_client.log" ]' "a log over 5 MB is rotated and the original emptied"
+check '[ "$(stat -c %U "$HOME/logs/kiosk_client.log.1")" == "$(id -un)" ]' "the rotated log stays owned by the kiosk user"
+
 echo "== Sourcing has no side effects"
 bash -c "source $REPO/setup.sh" > /tmp/out 2>&1; rc=$?
 check '[ $rc -eq 0 ] && [ ! -s /tmp/out ]' "sourcing setup.sh prints and runs nothing"

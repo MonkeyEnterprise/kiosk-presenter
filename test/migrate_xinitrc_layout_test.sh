@@ -78,6 +78,7 @@ check '! crontab -l | grep -qF "/usr/local/bin/tv-power"' "no cron jobs call the
 check 'crontab -l | grep -qF "/usr/bin/true"' "unrelated cron job kept"
 check 'grep -qF "/usr/local/bin/tv-power on" "$BACKUP/crontab"' "old crontab in the backup"
 check '[ "$(stat -c %U:%G /usr/local/bin/cloudflared)" == "root:root" ]' "cloudflared binary owned by root"
+check 'grep -qF "$HOME/logs/*.log" /etc/logrotate.d/kiosk-presenter' "log rotation installed"
 
 echo "== Second run on the migrated kiosk"
 sleep 1   # A new backup directory would get a different timestamp

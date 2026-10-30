@@ -37,6 +37,7 @@ The device runs as user `kiosk`. The repo must be cloned to `~/kiosk-presenter`:
 
 - Cloudflared: the binary is installed as a systemd service with `config/cloudflared-config.yml` as the config template (SSH to `localhost:22`, catch-all 404). `add-hostname`/`remove-hostname` edit `/etc/cloudflared/config.yml` with a backup, `ingress validate`, and a `cf-rollback` systemd timer that restores the old config after 5 minutes unless stopped. `route_dns` only uses `cloudflared tunnel route dns` for the zone from `cloudflared tunnel login`; for other domains it prints the CNAME to add by hand.
 - `bin/cloudflared-auto-update` is copied (not linked) to `/usr/local/bin`, because root runs it from cron and it must not be writable by the kiosk user. Keep it that way for anything root runs.
+- `install_logrotate` writes `config/logrotate.conf` to `/etc/logrotate.d/kiosk-presenter` (a root-owned copy, since logrotate runs as root), with `su <kiosk user>` and `copytruncate` so the scripts keep appending to the same file. `migrate.sh` calls it too.
 - `install_crontab` replaces every line matching `cec[-_]client.sh` or `tv-power` and keeps other jobs, so it is safe to re-run. It installs `~/tv-power.cron` when that exists (a kiosk's own schedule), else `config/tv-power.cron`.
 - `main` only runs when `setup.sh` is executed directly. `migrate.sh` sources it to reuse its functions, so keep top-level code in `setup.sh` free of side effects (`setup_test.sh` checks this).
 

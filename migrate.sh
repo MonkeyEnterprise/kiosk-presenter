@@ -28,7 +28,8 @@
 #    cron jobs. The kiosk keeps its own schedule: the times of its old jobs
 #    are written to ~/tv-power.cron, which setup.sh then uses instead of the
 #    default config/tv-power.cron.
-# 6. Makes /usr/local/bin/cloudflared owned by root again (older setups left
+# 6. Installs log rotation for ~/logs (/etc/logrotate.d/kiosk-presenter).
+# 7. Makes /usr/local/bin/cloudflared owned by root again (older setups left
 #    it owned by the kiosk user, while root runs it).
 #
 # Everything that is replaced is kept in ~/kiosk-backup-<date>. Running the
@@ -227,6 +228,7 @@ migrate_logs
 migrate_dotfiles
 install_tv_power
 migrate_crontab
+install_logrotate
 fix_cloudflared_owner
 check_remote_path
 
