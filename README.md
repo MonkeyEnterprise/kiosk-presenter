@@ -1,7 +1,5 @@
 # Kiosk Presenter for Raspberry Pi
 
-<p align="center"> <img src="https://upload.wikimedia.org/wikipedia/en/thumb/c/cb/Raspberry_Pi_Logo.svg/200px-Raspberry_Pi_Logo.svg.png" width="15%"> </p>
-
 This repository provides a script to set up a minimal digital signage system on Raspberry Pi 4 and 5, combined with optional Cloudflared tunneling for secure remote access. The system supports fullscreen image slideshows using `feh`, cloud media synchronization via `rclone`, and HDMI-CEC display control with `cec-utils`.
 
 ---
