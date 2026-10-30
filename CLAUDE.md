@@ -15,6 +15,7 @@ Bash-only digital signage setup for a Raspberry Pi 5. A fullscreen `feh` slidesh
   - The test files source [test/lib.sh](test/lib.sh) for `check '<condition>' "<description>"` and `finish`. The image has passwordless `sudo` for `kiosk`, like the Pi.
 - Not covered: autologin and `startx`, the wget bootstrap, the cloudflared and rclone parts of `setup.sh`, and CEC. They need a Debian arm64 VM or a real Pi, and CEC needs real hardware.
 - `bash -n <script>` for a quick syntax check.
+- Full install test in a VM: [test/vm/kiosk-vm.sh](test/vm/kiosk-vm.sh) (`create`, `start`, `ssh`, `sync`, `stop`, `reset`) runs a Debian arm64 VM with QEMU/hvf, set up like a fresh Pi (user `kiosk`, passwordless sudo, autologin on tty1), with the screen in a window and SSH on port 2222. `sync` copies the local working tree into `~/kiosk-presenter` in the VM, so changes can be tested before pushing. The disk lives in `~/.cache/kiosk-presenter-vm`.
 
 ## Layout and runtime flow
 
@@ -51,4 +52,4 @@ Everything it replaces goes to `~/kiosk-backup-<timestamp>`, and a second run ch
 
 - Each script starts with a `# ===` banner header (description, usage, `Author: Lorenzo Pouw 2025`, project URL), and sections are separated by `# ===` dividers. Each script defines its own `log()` helper that prefixes a `YYYY-MM-DD HH:MM:SS - ` timestamp.
 - Config values sit in a `# === CONFIG ===` block at the top of each runtime script.
-- Scripts must keep their executable bit in git (`git update-index --chmod=+x`), because `xinitrc` and cron call them directly.
+- Scripts must keep their executable bit in git, because `xinitrc`, cron and the README call them directly. This checkout has `core.fileMode=false`, so `git add` does not record it: run `git update-index --chmod=+x <file>` for every new script.

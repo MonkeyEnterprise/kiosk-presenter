@@ -83,10 +83,13 @@ bootstrap_repo() {
 # Install Dependencies
 # =============================================================================
 
+# Non-interactive, so apt doesn't stop to ask e.g. for a keyboard layout.
+# cron is listed because minimal Debian images don't include it.
 install_dependencies() {
     log "Installing necessary packages..."
-    sudo apt update && sudo apt full-upgrade -y
-    sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils jq git
+    sudo apt update
+    sudo env DEBIAN_FRONTEND=noninteractive apt full-upgrade -y
+    sudo env DEBIAN_FRONTEND=noninteractive apt install -y xorg x11-xserver-utils feh rclone cec-utils jq git cron
 }
 
 # =============================================================================
