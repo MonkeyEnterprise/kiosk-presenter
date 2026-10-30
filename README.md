@@ -50,7 +50,7 @@ The repository must be at `~/kiosk-presenter`. To update a kiosk later, run `git
 | `dotfiles/` | `bash_profile` and `xinitrc`, linked to `~/.bash_profile` and `~/.xinitrc` |
 | `config/tv-power.cron` | Display power schedule, installed in the crontab |
 | `config/cloudflared-config.yml` | Template for `/etc/cloudflared/config.yml` |
-| `assets/no-image.png` | Shown while there is no media yet |
+| `assets/no-image.svg` | Shown while there is no media yet, with the kiosk's hostname and IP address; fills any screen format |
 | `test/` | Tests that run in Docker |
 
 On the kiosk:

@@ -15,7 +15,7 @@
 # === CONFIG ===
 CLIENT="/repo/bin/kiosk_client.sh"
 REMOTE="/home/kiosk/remote"
-IMG="/repo/assets/no-image.png" # Any image will do as test media
+IMG="/repo/test/fixtures/image.png" # Any image will do as test media
 
 export KIOSK_MEDIA_DIR="/home/kiosk/media"
 export KIOSK_LOG_DIR="/home/kiosk/logs"
@@ -54,7 +54,9 @@ PID=$!; sleep 3
 check '[ -s "$LOG" ]' "script gets past argument parsing"
 check 'grep -q "Configured remote path: kiosk-dropbox:/" "$LOG"' "falls back to the default remote"
 check 'kill -0 $PID 2> /dev/null' "script keeps running after a failed sync"
-check '[[ "$(feh_args)" == *no-image.png* ]]' "feh shows the placeholder"
+check '[[ "$(feh_args)" == *placeholder.svg* ]]' "feh shows the placeholder"
+check 'grep -q "width=\"1280\" height=\"720\"" "$KIOSK_LOG_DIR/placeholder.svg"' "placeholder sized for the 1280x720 screen"
+check 'grep -qF "$(hostname) · " "$KIOSK_LOG_DIR/placeholder.svg" && ! grep -q "__DEVICE__" "$KIOSK_LOG_DIR/placeholder.svg"' "placeholder shows the hostname and IP address"
 
 echo "== --remote_path with an empty value (empty RCLONE_REMOTE_PATH in xinitrc)"
 reset_kiosk
@@ -104,7 +106,7 @@ check 'kill -0 $PID 2> /dev/null' "script keeps running"
 echo "== All files removed from the remote"
 rm "$REMOTE"/*.png; sleep 5
 check '[ -z "$(ls -A "$MEDIA")" ]' "media directory is empty"
-check '[[ "$(feh_args)" == *no-image.png* ]]' "feh switches to the placeholder"
+check '[[ "$(feh_args)" == *placeholder.svg* ]]' "feh switches to the placeholder"
 
 echo "== Media arrives on a kiosk showing the placeholder"
 cp "$IMG" "$REMOTE/e.png"; sleep 5
