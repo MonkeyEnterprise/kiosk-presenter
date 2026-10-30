@@ -1,0 +1,8 @@
+
+# Start X automatically if not already running
+if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
+    while true; do
+        startx -- -nocursor
+        sleep 5
+    done
+fi

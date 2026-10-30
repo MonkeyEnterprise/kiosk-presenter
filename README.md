@@ -34,6 +34,20 @@ chmod +x ~/kiosk-presenter/setup.sh
 ./kiosk-presenter/setup.sh
 ```
 
+When `setup.sh` is downloaded on its own, it fetches the files below from GitHub. In a clone it uses the local copies.
+
+### Installed files
+
+| File in repository              | Installed as                             |
+| ------------------------------- | ---------------------------------------- |
+| `files/xinitrc`                 | `~/.xinitrc`                             |
+| `files/bash_profile`            | appended to `~/.bash_profile`            |
+| `files/tv-power`                | `/usr/local/bin/tv-power`                |
+| `files/tv-power.cron`           | added to the user's crontab              |
+| `files/cloudflared-auto-update` | `/usr/local/bin/cloudflared-auto-update` |
+| `files/cloudflared-config.yml`  | template for `/etc/cloudflared/config.yml` |
+| `assets/no-image.png`           | `~/media/feh/no-image.png`               |
+
 ---
 
 ## Configuring `rclone`
@@ -67,10 +81,10 @@ Copy the `access_token` output and confirm:
 y/e/d> y
 ```
 
-Update `~/.xinitrc` to synchronize media at startup:
+Set the folder to synchronize in `REMOTE_PATH` at the top of `~/.xinitrc`:
 
 ```bash
-rclone sync dropbox_kiosk:"/<path_to_images>" ~/media/feh
+REMOTE_PATH="dropbox_kiosk:/<path_to_images>"
 ```
 
 ---
@@ -154,9 +168,11 @@ rclone ls dropbox_kiosk:
 ### Test HDMI-CEC Commands
 
 ```bash
-echo "standby 0" | cec-client -s -d 1  # Turn off display
-echo "on 0" | cec-client -s -d 1       # Turn on display
+tv-power off  # Turn off display (standby 0)
+tv-power on   # Turn on display (on 0, then claim active source)
 ```
+
+On TCL TVs, enable **T-Link**, **auto power on** and **quick start / instant power on**. Without quick start the TV ignores CEC while in standby.
 
 ### View Scheduled Tasks
 

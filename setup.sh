@@ -6,11 +6,29 @@ set -e  # Exit immediately if a command exits with a non-zero status.
 MEDIA_DIR="$HOME/media/feh"
 XINITRC="$HOME/.xinitrc"
 BASH_PROFILE="$HOME/.bash_profile"
-LOG_FILE="$HOME/feh_sync.log"
-HASH_FILE="$MEDIA_DIR/.last_hash"
-REMOTE_PATH="dropbox_kiosk:/path"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_RAW_URL="https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/main"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
 
 ### FUNCTIONS ###
+
+# Print the local path of a repository file (e.g. files/xinitrc). When
+# setup.sh was downloaded on its own, the file is fetched from GitHub.
+repo_file() {
+    local rel="$1"
+    local dest="$TMP_DIR/$(basename "$rel")"
+
+    if [ -f "$SCRIPT_DIR/$rel" ]; then
+        echo "$SCRIPT_DIR/$rel"
+        return
+    fi
+    if ! wget -q -O "$dest" "$REPO_RAW_URL/$rel"; then
+        echo "Failed to download $rel" >&2
+        return 1
+    fi
+    echo "$dest"
+}
 
 install_dependencies() {
     echo "=== Installing necessary packages ==="
@@ -21,8 +39,7 @@ install_dependencies() {
 setup_media_directory() {
     echo "=== Setting up media directory ==="
     mkdir -p "$MEDIA_DIR"
-    wget -q -O "$MEDIA_DIR/no-image.png" \
-        "https://raw.githubusercontent.com/MonkeyEnterprise/kiosk-presenter/refs/heads/main/assets/no-image.png"
+    cp "$(repo_file assets/no-image.png)" "$MEDIA_DIR/no-image.png"
 }
 
 configure_bash_profile() {
@@ -30,105 +47,31 @@ configure_bash_profile() {
 
     # Append startx autostart only if it's not already present
     if ! grep -q 'startx' "$BASH_PROFILE"; then
-        cat << 'EOF' >> "$BASH_PROFILE"
-
-# Start X automatically if not already running
-if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
-    while true; do
-        startx -- -nocursor
-        sleep 5
-    done
-fi
-EOF
+        cat "$(repo_file files/bash_profile)" >> "$BASH_PROFILE"
     fi
 }
 
 create_xinitrc() {
     echo "=== Creating ~/.xinitrc ==="
 
-    cat <<EOL > "$XINITRC"
-#!/bin/bash
-xset s off &
-xset -dpms &
-xset s noblank &
-
-mkdir -p "$MEDIA_DIR"
-
-# Function to synchronize media using rclone
-sync_media() {
-    echo "\$(date): Starting rclone sync" >> "$LOG_FILE"
-    (rclone sync "$REMOTE_PATH" "$MEDIA_DIR" --exclude "*/**" --delete-during >> "$LOG_FILE" 2>&1 || true)
+    install -m 755 "$(repo_file files/xinitrc)" "$XINITRC"
 }
 
-# Function to start the slideshow and restart on failure
-start_feh() {
-    echo "\$(date): Starting feh" >> "$LOG_FILE"
-    while true; do
-        feh -recursive -Y -x -q -D 30 -B black -F -Z "$MEDIA_DIR"
-        sleep 5
-    done
-}
-
-# Function to detect media changes and restart feh if needed
-update_display_if_changed() {
-    NEW_HASH=\$(ls -lR "$MEDIA_DIR" | sha256sum)
-
-    if [ ! -f "$HASH_FILE" ]; then
-        echo "$NEW_HASH" > "$HASH_FILE"
-    fi
-
-    OLD_HASH=\$(cat "$HASH_FILE")
-    echo "\$(date): Old hash: \$OLD_HASH" >> "$LOG_FILE"
-    echo "\$(date): New hash: \$NEW_HASH" >> "$LOG_FILE"
-
-    if [ "\$NEW_HASH" != "\$OLD_HASH" ]; then
-        echo "\$(date): Media changed, restarting feh" >> "$LOG_FILE"
-        echo "\$NEW_HASH" > "$HASH_FILE"
-        pkill -x feh
-        start_feh &
-    else
-        echo "\$(date): No changes detected, feh continues running" >> "$LOG_FILE"
-    fi
-
-    if ! pgrep -x feh > /dev/null; then
-        echo "\$(date): feh was not running, starting feh" >> "$LOG_FILE"
-        start_feh &
-    fi
-}
-
-# Initial sync and display update
-sync_media
-update_display_if_changed
-
-# Sync and check for changes every 5 minutes
-while true; do
-    sleep 300
-    sync_media
-    update_display_if_changed
-done
-EOL
-
-    chmod +x "$XINITRC"
+create_tv_power_script() {
+    echo "=== Creating TV power script ==="
+    sudo install -m 755 "$(repo_file files/tv-power)" /usr/local/bin/tv-power
 }
 
 setup_crontab() {
     echo "=== Setting up CEC power schedule in crontab ==="
 
     # Remove existing CEC commands
-    crontab -l 2>/dev/null | grep -v "cec-client" | crontab -
+    crontab -l 2>/dev/null | grep -v -e "cec-client" -e "tv-power" | crontab -
 
     # Add new schedule
-    (crontab -l 2>/dev/null; cat <<EOF
-0 6 * * 1-5 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1
-0 9 * * 1-5 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1
-30 18 * * 3 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1
-0 20 * * 3 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1
-0 9 * * 7 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1
-30 13 * * 7 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1
-0 17 * * 7 echo 'on 0' | cec-client -s -d 1 >/dev/null 2>&1
-30 19 * * 7 echo 'standby 0' | cec-client -s -d 1 >/dev/null 2>&1
-EOF
-    ) | crontab -
+    local schedule
+    schedule="$(repo_file files/tv-power.cron)"
+    (crontab -l 2>/dev/null; cat "$schedule") | crontab -
 }
 
 prompt_rclone_setup() {
@@ -230,17 +173,13 @@ prompt_cloudflared_setup() {
             sudo rm /etc/cloudflared/config.yml
         fi
 
-        # Write new config.yml
-        cat <<EOF | sudo tee "$config_file" > /dev/null
-tunnel: "$tunnel_id"
-credentials-file: "$credentials_file"
-origincert: /root/.cloudflared/cert.pem
-ingress:
-  - hostname: "$tunnel_name.$domain_name"
-    service: ssh://localhost:22
-  - hostname: "*"
-    service: http_status:404
-EOF
+        # Write new config.yml from the template
+        local template
+        template="$(repo_file files/cloudflared-config.yml)"
+        sed -e "s|__TUNNEL_ID__|$tunnel_id|" \
+            -e "s|__CREDENTIALS_FILE__|$credentials_file|" \
+            -e "s|__HOSTNAME__|$tunnel_name.$domain_name|" \
+            "$template" | sudo tee "$config_file" > /dev/null
         echo "Generated $config_file for tunnel '$tunnel_name' with domain '$tunnel_name.$domain_name'."
 
         # Service install
@@ -264,39 +203,7 @@ setup_cloudflared_update() {
 
     echo "=== Setting up nightly cloudflared update in root's crontab ==="
 
-    cat <<EOF | sudo tee "$update_script" > /dev/null
-#!/bin/sh
-# Installed by kiosk-presenter setup.sh: updates cloudflared and rolls back
-# to the previous binary when the tunnel service does not come back.
-BIN=/usr/local/bin/cloudflared
-LOG=$log_file
-
-echo "\$(date): checking for cloudflared update (\$(\$BIN --version 2>&1 | head -n 1))" >> "\$LOG"
-cp "\$BIN" "\$BIN.bak"
-
-"\$BIN" update >> "\$LOG" 2>&1
-code=\$?
-
-# Exit code 11 means a new version was installed
-if [ "\$code" -ne 11 ]; then
-    rm -f "\$BIN.bak"
-    exit 0
-fi
-
-echo "\$(date): updated to \$(\$BIN --version 2>&1 | head -n 1), restarting tunnel" >> "\$LOG"
-systemctl restart cloudflared
-sleep 30
-
-if systemctl is-active --quiet cloudflared; then
-    echo "\$(date): tunnel running after update" >> "\$LOG"
-    rm -f "\$BIN.bak"
-else
-    echo "\$(date): tunnel not running after update, restoring previous version" >> "\$LOG"
-    mv "\$BIN.bak" "\$BIN"
-    systemctl restart cloudflared
-fi
-EOF
-    sudo chmod 755 "$update_script"
+    sudo install -m 755 "$(repo_file files/cloudflared-auto-update)" "$update_script"
 
     # One updater is enough: the cloudflared-update.timer from 'service install' is replaced by the cron job
     sudo systemctl disable --now cloudflared-update.timer 2>/dev/null || true
@@ -527,6 +434,7 @@ case "${1:-}" in
         setup_media_directory
         configure_bash_profile
         create_xinitrc
+        create_tv_power_script
         setup_crontab
         prompt_cloudflared_setup
         prompt_rclone_setup
