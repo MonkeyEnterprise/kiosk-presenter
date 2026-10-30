@@ -185,10 +185,25 @@ Kiosks installed with an earlier version have one of these layouts:
 * the whole sync loop in `~/.xinitrc`, media in `~/media/feh` and the log in `~/feh_sync.log`;
 * scripts and logs in `~/core` and media in `~/feh`.
 
-To move one to the current layout:
+To move one to the current layout, first get the current version into `~/kiosk-presenter`.
+
+If the kiosk was installed with `wget` (there is no `~/kiosk-presenter`), clone it:
 
 ```bash
 git clone https://github.com/MonkeyEnterprise/kiosk-presenter.git ~/kiosk-presenter
+```
+
+If it was installed with `git` (`~/kiosk-presenter` exists), update it. The old installation instructions ran `chmod +x` on `setup.sh`, and git counts that as a local change, so `git pull` refuses until it is stashed:
+
+```bash
+cd ~/kiosk-presenter
+git stash
+git pull
+```
+
+Then migrate and reboot:
+
+```bash
 ~/kiosk-presenter/migrate.sh
 sudo reboot
 ```
