@@ -88,7 +88,7 @@ check '[ -f "$HOME/media/poster.png" ]' "media untouched"
 
 echo "== Scripts work from the new layout"
 tv-power off > /dev/null 2>&1
-check 'grep -q "Starting CEC command execution: standby 0" "$HOME/logs/cec_client.log"' "tv-power off reaches cec_client.sh, which logs to ~/logs"
+check 'grep -q "Starting CEC command execution: --standby" "$HOME/logs/cec_client.log"' "tv-power off reaches cec_client.sh, which logs to ~/logs"
 check '[ -x "$REPO/bin/kiosk_client.sh" ] && [ -x "$TV_POWER" ]' "scripts are executable"
 
 finish

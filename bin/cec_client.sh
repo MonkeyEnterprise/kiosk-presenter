@@ -1,34 +1,41 @@
 #!/bin/bash
 
 # =============================================================================
-# CEC Client Script - Interact with HDMI Devices using the CEC Protocol
+# CEC Client Script - Control the TV over HDMI-CEC
 # -----------------------------------------------------------------------------
-# This script interacts with CEC (Consumer Electronics Control) adapters over 
-# HDMI to send commands for managing devices such as TVs, audio systems, and more. 
-# The script supports executing CEC commands such as turning devices on/off, 
-# setting standby modes, etc., across multiple detected CEC adapters.
+# Sends one CEC command to the TV through the HDMI port it is connected to.
+# The Raspberry Pi 5 has two HDMI ports (/dev/cec0 and /dev/cec1), and both
+# respond to a scan, also without a TV. So every port is scanned, and ports
+# where the TV (logical address 0) shows up are tried first. When no port
+# shows the TV (e.g. a TV that ignores CEC while in standby), all ports that
+# respond are tried in order. The first port that transmits the command wins.
 #
 # Usage:
-#   ./cec_client.sh <commands>
-# 
+#   cec_client.sh --on | --standby | --as
+#
 # Options:
-#   <commands>   : The CEC commands to be sent to the detected CEC adapters.
+#   --on        Turn the TV on and, once that succeeded, make the Pi the
+#               active source, so the TV switches back to the Pi's input even
+#               when someone left it on another channel. Some TVs (e.g. TCL)
+#               also only really switch on after that.
+#   --standby   Put the TV in standby
+#   --as        Only make the Pi the active source
 #
-# Example:
-#   ./cec_client.sh "on 0" "standby 0"
+# Environment:
+#   KIOSK_LOG_DIR       Log directory (default ~/logs)
+#   KIOSK_CEC_DEVICES   CEC devices to try, as a glob (default /dev/cec*)
+#   KIOSK_CEC_AS_DELAY  Seconds between 'on' and 'as' for --on, so the TV has
+#                       time to wake up (default 5)
 #
-# Commands:
-#   - "on <logical_address>"      : Power on a device at a specific logical address.
-#   - "standby <logical_address>" : Put a device into standby mode at a specific logical address.
-# -----------------------------------------------------------------------------
 # Author: Lorenzo Pouw 2025
 # Project: https://github.com/MonkeyEnterprise/kiosk-presenter
 # =============================================================================
 
 # === CONFIG ===
-LOG_DIR="${KIOSK_LOG_DIR:-$HOME/logs}"   # Log directory (shared with kiosk_client.sh)
-LOGFILE="$LOG_DIR/cec_client.log"       # Log file to store all log messages
-COMMANDS=()               # Array to store all CEC commands passed as arguments
+LOG_DIR="${KIOSK_LOG_DIR:-$HOME/logs}"          # Log directory (shared with kiosk_client.sh)
+LOGFILE="$LOG_DIR/cec_client.log"               # Log file to store all log messages
+DEVICES="${KIOSK_CEC_DEVICES:-/dev/cec*}"       # CEC adapters to try
+AS_DELAY="${KIOSK_CEC_AS_DELAY:-5}"             # Wait between 'on' and 'as'
 
 mkdir -p "$LOG_DIR"
 
@@ -37,90 +44,90 @@ log() {
   echo "$(date "+%Y-%m-%d %H:%M:%S") - $*" >> "$LOGFILE"
 }
 
-# Parse the script arguments to capture commands
-while (( "$#" )); do
-  COMMANDS+=("$1")
-  shift
-done
+usage() {
+  echo "Usage: $0 --on | --standby | --as"
+}
 
-# Ensure at least one CEC command is provided
-if [ ${#COMMANDS[@]} -eq 0 ]; then
-  log "Error: No CEC command provided. Usage: $0 'on 0'"
-  exit 1
-fi
+# Send a command to one adapter; fails when the adapter can't transmit it
+send_command() {
+  local dev="$1"
+  local cmd="$2"
+  local output
 
-# Log the start of CEC command execution
-log "Starting CEC command execution: ${COMMANDS[*]}"
+  log "Sending '$cmd' to $dev"
+  output=$(echo "$cmd" | cec-client -s -d 1 "$dev" 2>&1)
+  log "Command output for $dev:"
+  log "$output"
 
-# Detect all available CEC adapters (e.g., /dev/cec0, /dev/cec1, etc.)
-adapters=(/dev/cec*)
-
-# Exit if no CEC adapters are found
-if [ ${#adapters[@]} -eq 0 ]; then
-  log "No CEC adapters found."
-  exit 1
-fi
-
-# Log the list of found adapters
-log "Found ${#adapters[@]} CEC adapter(s): ${adapters[*]}"
-
-# Iterate over each detected adapter device
-for dev in "${adapters[@]}"; do
-  # Confirm the device file exists (may be a glob without matches)
-  if [ ! -e "$dev" ]; then
-    log "Device $dev does not exist."
-    continue
+  if echo "$output" | grep -q 'ioctl CEC_TRANSMIT failed'; then
+    log "Transmission error on $dev for '$cmd'."
+    return 1
   fi
+}
 
-  log "Testing CEC adapter: $dev"
+# Map the option to the cec-client command
+case "$1" in
+  --on)      COMMAND="on 0" ;;
+  --standby) COMMAND="standby 0" ;;
+  --as)      COMMAND="as" ;;
+  *)
+    usage
+    log "Error: invalid option '$1'"
+    exit 1
+    ;;
+esac
 
-  # Send 'scan' command to test if the adapter responds
+log "Starting CEC command execution: $1 ($COMMAND)"
+
+# Scan every adapter and sort them: adapters that see the TV first, then the
+# other adapters that respond
+tv_adapters=()
+other_adapters=()
+for dev in $DEVICES; do
+  # The glob stays unexpanded when there are no adapters
+  [ -e "$dev" ] || continue
+
   output=$(echo 'scan' | cec-client -s -d 1 "$dev" 2>&1)
   exit_code=$?
-
-  # Log the scan output to the logfile
   log "Scan output for $dev:"
   log "$output"
 
-  # Check if the scan command failed (non-zero exit) or output contains "error"
   if [ $exit_code -ne 0 ] || echo "$output" | grep -iq "error"; then
     log "Adapter $dev did not respond to scan."
-    continue
-  fi
-
-  # Flag to track if all commands sent to this adapter succeed
-  all_success=true
-
-  # Loop over each CEC command provided as argument
-  for cmd in "${COMMANDS[@]}"; do
-    log "Sending command: $cmd to $dev"
-
-    # Send command to adapter and capture output
-    output=$(echo "$cmd" | cec-client -s -d 1 "$dev" 2>&1)
-
-    # Log command output to the logfile
-    log "Command output for $dev:"
-    log "$output"
-
-    # Detect transmission errors in the output (e.g., failure to transmit)
-    if echo "$output" | grep -q 'ioctl CEC_TRANSMIT failed'; then
-      log "Transmission error on $dev for command: $cmd"
-      all_success=false
-      break  # Stop sending further commands to this adapter
-    fi
-  done
-
-  # If all commands succeeded on this adapter, log success and exit
-  if $all_success; then
-    log "Commands successfully executed on $dev"
-    exit 0
+  elif echo "$output" | grep -q "^device #0:"; then
+    log "Adapter $dev sees the TV."
+    tv_adapters+=("$dev")
   else
-    # Otherwise, try the next adapter
-    log "Commands failed on $dev, trying next adapter."
+    log "Adapter $dev responds, but sees no TV."
+    other_adapters+=("$dev")
   fi
 done
 
-# If no working CEC adapters were found, log failure and exit with error code
-log "No working CEC adapter found after trying all."
-exit 1
+adapters=("${tv_adapters[@]}" "${other_adapters[@]}")
+if [ ${#adapters[@]} -eq 0 ]; then
+  log "No working CEC adapters found."
+  exit 1
+fi
 
+# Send the command, stop at the first adapter that transmits it
+for dev in "${adapters[@]}"; do
+  if ! send_command "$dev" "$COMMAND"; then
+    log "Trying next adapter."
+    continue
+  fi
+  log "Command successfully executed on $dev"
+
+  # After a successful 'on', switch the TV to the Pi's input on the same port
+  if [ "$1" == "--on" ]; then
+    sleep "$AS_DELAY"
+    if ! send_command "$dev" "as"; then
+      log "TV is on, but switching it to the Pi's input failed."
+      exit 1
+    fi
+    log "TV switched to the Pi's input on $dev"
+  fi
+  exit 0
+done
+
+log "No adapter could transmit '$COMMAND'."
+exit 1

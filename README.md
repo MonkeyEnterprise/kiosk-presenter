@@ -107,7 +107,7 @@ The schedule is in `config/tv-power.cron`. After changing it, install it again w
 bash -c 'source ~/kiosk-presenter/setup.sh && install_crontab'
 ```
 
-`tv-power on` sends `on 0` and, after 5 seconds, claims active source (`as`), because some TVs (e.g. TCL) only switch on then.
+`tv-power on|off` calls `bin/cec_client.sh --on` or `--standby`. The script scans every HDMI port (the Pi 5 has two) and sends the command to the port the TV is connected to. When `--on` succeeds, it also makes the Pi the active source after 5 seconds. That switches the TV back to the Pi's input when someone left it on another channel, and some TVs (e.g. TCL) only really switch on then.
 
 ---
 
@@ -233,9 +233,12 @@ rclone ls dropbox_kiosk:
 ### Test HDMI-CEC Commands
 
 ```bash
-tv-power off  # Turn off display (standby 0)
-tv-power on   # Turn on display (on 0, then claim active source)
+tv-power off                              # Turn off display
+tv-power on                               # Turn on display and switch it to the Pi
+~/kiosk-presenter/bin/cec_client.sh --as  # Only switch the TV to the Pi
 ```
+
+`~/logs/cec_client.log` shows which HDMI port sees the TV and what was sent.
 
 On TCL TVs, enable **T-Link**, **auto power on** and **quick start / instant power on**. Without quick start the TV ignores CEC while in standby.
 
