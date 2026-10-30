@@ -4,11 +4,14 @@
 # CEC Client Script - Control the TV over HDMI-CEC
 # -----------------------------------------------------------------------------
 # Sends one CEC command to the TV through the HDMI port it is connected to.
-# The Raspberry Pi 5 has two HDMI ports (/dev/cec0 and /dev/cec1), and both
-# respond to a scan, also without a TV. So every port is scanned, and ports
-# where the TV (logical address 0) shows up are tried first. When no port
-# shows the TV (e.g. a TV that ignores CEC while in standby), all ports that
-# respond are tried in order. The first port that transmits the command wins.
+# The Raspberry Pi 5 has two HDMI ports (/dev/cec0 and /dev/cec1). Every port
+# is scanned and tried in this order, until one transmits the command:
+# 1. ports whose scan shows the TV (logical address 0), even if the scan also
+#    logged errors;
+# 2. ports whose scan ran without errors;
+# 3. ports whose scan failed. A port without a TV logs 'ioctl CEC_TRANSMIT
+#    failed' errors during the scan; it is still tried last, in case the TV
+#    didn't answer the scan.
 #
 # Usage:
 #   cec_client.sh --on | --standby | --as
@@ -79,10 +82,10 @@ esac
 
 log "Starting CEC command execution: $1 ($COMMAND)"
 
-# Scan every adapter and sort them: adapters that see the TV first, then the
-# other adapters that respond
+# Scan every adapter and sort them into the three groups described above
 tv_adapters=()
 other_adapters=()
+failed_adapters=()
 for dev in $DEVICES; do
   # The glob stays unexpanded when there are no adapters
   [ -e "$dev" ] || continue
@@ -92,20 +95,21 @@ for dev in $DEVICES; do
   log "Scan output for $dev:"
   log "$output"
 
-  if [ $exit_code -ne 0 ] || echo "$output" | grep -iq "error"; then
-    log "Adapter $dev did not respond to scan."
-  elif echo "$output" | grep -q "^device #0:"; then
+  if echo "$output" | grep -q "^device #0:"; then
     log "Adapter $dev sees the TV."
     tv_adapters+=("$dev")
+  elif [ $exit_code -ne 0 ] || echo "$output" | grep -iq "error"; then
+    log "Adapter $dev scan failed (no TV on this port?), trying it last."
+    failed_adapters+=("$dev")
   else
     log "Adapter $dev responds, but sees no TV."
     other_adapters+=("$dev")
   fi
 done
 
-adapters=("${tv_adapters[@]}" "${other_adapters[@]}")
+adapters=("${tv_adapters[@]}" "${other_adapters[@]}" "${failed_adapters[@]}")
 if [ ${#adapters[@]} -eq 0 ]; then
-  log "No working CEC adapters found."
+  log "No CEC adapters found."
   exit 1
 fi
 

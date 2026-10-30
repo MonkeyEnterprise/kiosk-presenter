@@ -7,7 +7,8 @@
 # CEC devices, to check which HDMI port the commands are sent to. The fake
 # prints a scan like the real cec-client, with the TV (device #0) only on the
 # port in FAKE_TV_DEVICE, and fails to transmit on the ports in
-# FAKE_FAIL_DEVICES. Meant to run inside the container started by
+# FAKE_FAIL_DEVICES. The scan output is copied from a real Raspberry Pi 5:
+# the port without the TV logs transmit errors. Meant to run inside the container started by
 # test/run.sh, with the repository mounted at /repo.
 #
 # Author: Lorenzo Pouw 2025
@@ -28,7 +29,8 @@ export PATH="$FAKE_DIR/bin:$PATH"
 mkdir -p "$FAKE_DIR/bin" "$FAKE_DIR/dev"
 cat > "$FAKE_DIR/bin/cec-client" <<'FAKE'
 #!/bin/bash
-# Fake cec-client: cec-client -s -d 1 <device>, command on stdin
+# Fake cec-client: cec-client -s -d 1 <device>, command on stdin. The scan
+# output is copied from a Raspberry Pi 5 with the TV on cec1.
 dev="${!#}"
 read -r cmd
 if [ "$cmd" == "scan" ]; then
@@ -37,9 +39,16 @@ if [ "$cmd" == "scan" ]; then
     echo "CEC bus information"
     echo "==================="
     if [ "$dev" == "$FAKE_TV_DEVICE" ]; then
-        printf 'device #0: TV\naddress:       0.0.0.0\npower status:  standby\n\n'
+        printf 'device #0: TV\naddress:       0.0.0.0\nactive source: no\nvendor:        Unknown\nosd string:    TV\nCEC version:   1.4\npower status:  standby\nlanguage:      ???\n\n\n'
     fi
-    printf 'device #1: Recorder 1\naddress:       1.0.0.0\n\n'
+    printf 'device #1: Recorder 1\naddress:       1.0.0.0\nactive source: no\nvendor:        Pulse Eight\nosd string:    CECTester\nCEC version:   1.4\npower status:  on\nlanguage:      eng\n\n\n'
+    echo "currently active source: unknown (-1)"
+    # A port without the TV logs transmit errors while polling the bus
+    if [ "$dev" != "$FAKE_TV_DEVICE" ] || [ -n "$FAKE_TV_SCAN_ERRORS" ]; then
+        for i in 1 2 3; do
+            echo "ERROR:   [            1725]	CLinuxCECAdapterCommunication::Write - ioctl CEC_TRANSMIT failed - tx_status=00 errno=64"
+        done
+    fi
     exit 0
 fi
 echo "$(basename "$dev") $cmd" >> "$FAKE_CEC_CALLS"
@@ -58,7 +67,7 @@ reset_ports() {
     for ((i = 0; i < $1; i++)); do
         touch "$FAKE_DIR/dev/cec$i"
     done
-    unset FAKE_TV_DEVICE FAKE_FAIL_DEVICES
+    unset FAKE_TV_DEVICE FAKE_FAIL_DEVICES FAKE_TV_SCAN_ERRORS
 }
 
 calls() {
@@ -80,7 +89,7 @@ check '[ $rc -ne 0 ] && grep -q "Usage:" /tmp/out' "a raw command is rejected wi
 "$CEC" > /tmp/out 2>&1; rc=$?
 check '[ $rc -ne 0 ] && grep -q "Usage:" /tmp/out' "no option is rejected with usage"
 
-echo "== TV on the second HDMI port"
+echo "== TV on cec1, cec0 scan fails (as on a real Pi 5)"
 reset_ports 2
 export FAKE_TV_DEVICE="$FAKE_DIR/dev/cec1"
 "$CEC" --on; rc=$?
@@ -88,18 +97,25 @@ check '[ $rc -eq 0 ]' "exits successfully"
 check '[ "$(calls)" == "$(printf "cec1 on 0\ncec1 as")" ]' "on and as sent only to cec1, the port with the TV"
 check 'grep -q "Adapter .*cec1 sees the TV" "$KIOSK_LOG_DIR/cec_client.log"' "log says which port sees the TV"
 
-echo "== TV on the first HDMI port"
+echo "== TV on cec0"
 reset_ports 2
 export FAKE_TV_DEVICE="$FAKE_DIR/dev/cec0"
 "$CEC" --standby
 check '[ "$(calls)" == "cec0 standby 0" ]' "command sent only to cec0"
 
-echo "== No port sees the TV"
+echo "== Scan of the TV's port also logs errors"
+reset_ports 2
+export FAKE_TV_DEVICE="$FAKE_DIR/dev/cec1"
+export FAKE_TV_SCAN_ERRORS=1
+"$CEC" --standby
+check '[ "$(calls)" == "cec1 standby 0" ]' "the port that sees the TV still wins"
+
+echo "== No port sees the TV, every scan fails"
 reset_ports 2
 "$CEC" --on; rc=$?
-check '[ $rc -eq 0 ] && [ "$(calls)" == "$(printf "cec0 on 0\ncec0 as")" ]' "falls back to the first port that responds"
+check '[ $rc -eq 0 ] && [ "$(calls)" == "$(printf "cec0 on 0\ncec0 as")" ]' "still tries the ports, in order"
 
-echo "== Transmit fails on the port without the TV"
+echo "== No port sees the TV, transmit fails on cec0"
 reset_ports 2
 export FAKE_FAIL_DEVICES="$FAKE_DIR/dev/cec0"
 "$CEC" --on; rc=$?
@@ -115,7 +131,7 @@ check '! calls | grep -q " as$"' "no as after a failed on"
 echo "== No CEC devices"
 reset_ports 0
 "$CEC" --on; rc=$?
-check '[ $rc -ne 0 ] && grep -q "No working CEC adapters found" "$KIOSK_LOG_DIR/cec_client.log"' "exits with an error and logs it"
+check '[ $rc -ne 0 ] && grep -q "No CEC adapters found" "$KIOSK_LOG_DIR/cec_client.log"' "exits with an error and logs it"
 check '[ -z "$(calls)" ]' "sends nothing"
 
 echo "== tv-power"
