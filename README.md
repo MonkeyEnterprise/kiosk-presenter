@@ -48,6 +48,7 @@ The repository must be at `~/kiosk-presenter`. To update a kiosk later, run `git
 | `dotfiles/` | `bash_profile` and `xinitrc`, linked to `~/.bash_profile` and `~/.xinitrc` |
 | `config/tv-power.cron` | Display power schedule, installed in the crontab |
 | `config/cloudflared-config.yml` | Template for `/etc/cloudflared/config.yml` |
+| `config/logrotate.conf` | Template for `/etc/logrotate.d/kiosk-presenter` |
 | `assets/no-image.svg` | Shown while there is no media yet, with the kiosk's hostname and IP address; fills any screen format |
 | `test/` | Tests that run in Docker |
 
@@ -57,7 +58,7 @@ On the kiosk:
 |---|---|
 | `~/kiosk-presenter` | This repository |
 | `~/media` | Media synced from the cloud. Anything not on the remote is deleted. |
-| `~/logs` | `kiosk_client.log`, `cec_client.log` and the hash cache |
+| `~/logs` | `kiosk_client.log`, `cec_client.log` and the hash cache. Rotated weekly, or above 5 MB; 4 compressed old logs are kept (`/etc/logrotate.d/kiosk-presenter`) |
 | `/usr/local/bin/tv-power` | Link to `bin/tv-power` |
 
 ---

@@ -89,7 +89,7 @@ install_dependencies() {
     log "Installing necessary packages..."
     sudo apt update
     sudo env DEBIAN_FRONTEND=noninteractive apt full-upgrade -y
-    sudo env DEBIAN_FRONTEND=noninteractive apt install -y xorg x11-xserver-utils feh rclone cec-utils jq git cron
+    sudo env DEBIAN_FRONTEND=noninteractive apt install -y xorg x11-xserver-utils feh rclone cec-utils jq git cron logrotate
 }
 
 # =============================================================================
@@ -131,6 +131,16 @@ install_dotfiles() {
 install_tv_power() {
     sudo ln -sfn "$REPO_DIR/bin/tv-power" /usr/local/bin/tv-power
     log "/usr/local/bin/tv-power now links to $REPO_DIR/bin/tv-power"
+}
+
+# Rotate the logs in ~/logs, so they don't fill the SD card. logrotate runs
+# as root, so the config is a root-owned copy in /etc/logrotate.d.
+install_logrotate() {
+    local dest="/etc/logrotate.d/kiosk-presenter"
+    sed -e "s|__LOGS__|$HOME/logs|g" -e "s|__USER__|$(id -un)|g" -e "s|__GROUP__|$(id -gn)|g" \
+        "$REPO_DIR/config/logrotate.conf" | sudo tee "$dest" > /dev/null
+    sudo chmod 644 "$dest"
+    log "Log rotation installed in $dest"
 }
 
 # Display power schedule of this kiosk: ~/tv-power.cron when it exists (a
@@ -560,6 +570,7 @@ main() {
             install_dotfiles
             install_tv_power
             install_crontab
+            install_logrotate
             prompt_cloudflared_setup
             prompt_rclone_setup
             prompt_reboot
