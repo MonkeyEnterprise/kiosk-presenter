@@ -11,8 +11,8 @@
 # Usage:
 #   tv-power on|off
 #
-# Some TVs (e.g. TCL) only switch on when the Pi also claims active source,
-# so 'on' sends 'as' after the TV has had time to wake up.
+# 'on' also switches the TV to the Pi's input once it is on (see --on in
+# cec_client.sh).
 #
 # Author: Lorenzo Pouw 2025
 # Project: https://github.com/MonkeyEnterprise/kiosk-presenter
@@ -22,12 +22,10 @@ CEC_CLIENT="$(dirname "$(realpath "$0")")/cec_client.sh"
 
 case "$1" in
     on)
-        "$CEC_CLIENT" "on 0"
-        sleep 5
-        "$CEC_CLIENT" "as"
+        "$CEC_CLIENT" --on
         ;;
     off)
-        "$CEC_CLIENT" "standby 0"
+        "$CEC_CLIENT" --standby
         ;;
     *)
         echo "Usage: tv-power on|off"
