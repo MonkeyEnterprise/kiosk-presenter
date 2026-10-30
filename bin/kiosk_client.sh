@@ -38,18 +38,24 @@
 # =============================================================================
 
 # === CONFIG ===
-DIR="/home/kiosk/feh"            	# Media directory
-LOG="/home/kiosk/core/kiosk_client.log"	# Log file
-CACHE="/home/kiosk/core/.cache"         # Cache file for hash
-REMOTE="kiosk-dropbox:/"     		# Default remote path
-TIMER=300                    		# Sync interval (seconds)
+# Paths can be overridden with environment variables (used by the tests).
+REPO_DIR=$(dirname "$(dirname "$(realpath "$0")")")
+DIR="${KIOSK_MEDIA_DIR:-$HOME/media}"           # Media directory
+LOG_DIR="${KIOSK_LOG_DIR:-$HOME/logs}"          # Logs and hash cache
+LOG="$LOG_DIR/kiosk_client.log"                 # Log file
+CACHE="$LOG_DIR/.cache"                         # Cache file for hash
+PLACEHOLDER="$REPO_DIR/assets/no-image.png"     # Shown while the media directory is empty
+REMOTE="kiosk-dropbox:/"                        # Default remote path
+TIMER="${KIOSK_SYNC_INTERVAL:-300}"             # Sync interval (seconds)
 
 # Parse arguments for custom remote path
 while (( "$#" )); do
     case "$1" in
         --remote_path)
-            REMOTE="$2"        # Set the remote path argument
-            shift 2            # Skip to the next argument
+            # Keep the default remote if no (or an empty) path is given
+            [ -n "$2" ] && REMOTE="$2"
+            shift
+            [ "$#" -gt 0 ] && shift
             ;;
         *)
             echo "Unknown option: $1"
@@ -81,22 +87,32 @@ check_feh() {
     fi
 }
 
-# Sync media from remote to local directory using rclone
+# Sync media from remote to local directory using rclone.
+# A failed sync (e.g. no network) is logged but not fatal: the slideshow keeps
+# showing the media from the last successful sync.
 sync_media() {
     log "Starting sync from $REMOTE to $DIR"
     output=$(rclone sync "$REMOTE" "$DIR" --exclude '*/**' --delete-during 2>&1)
-    log "$output"
+    local exit_code=$?
+    [ -n "$output" ] && log "$output"
 
-    if echo "$output" | grep -i "error"; then
-        log "Sync failed. Check log for details."
-        exit 1
+    if [ $exit_code -ne 0 ]; then
+        log "Sync failed (exit code $exit_code). Keeping existing media."
+        return 1
     fi
 }
 
-# Start feh slideshow (runs in background)
+# Start feh slideshow (runs in background). If there is no media yet (e.g. a
+# new kiosk without a successful sync), show the placeholder instead, since
+# feh exits immediately on an empty directory.
 start_feh() {
-    log "Starting feh slideshow"
-    feh -recursive -Y -x -q -D 30 -B black -F -Z "$DIR" &
+    if [ -z "$(ls -A "$DIR")" ]; then
+        log "No media in $DIR. Showing placeholder."
+        feh -Y -x -q -B black -F -Z "$PLACEHOLDER" &
+    else
+        log "Starting feh slideshow"
+        feh -recursive -Y -x -q -D 30 -B black -F -Z "$DIR" &
+    fi
 }
 
 # Check if media has changed by comparing hash and restart feh if needed
@@ -134,12 +150,12 @@ check_changes() {
 
 # === MAIN LOOP ===
 
+# Create media and log directories if they don't exist
+mkdir -p "$DIR" "$LOG_DIR"
+
 # Check if required programs are installed
 check_rclone
 check_feh
-
-# Create media directory if it doesn't exist
-mkdir -p "$DIR"
 
 # Log the configured remote path
 log "Configured remote path: $REMOTE"
@@ -154,14 +170,3 @@ while true; do
     sync_media                # Sync media
     check_changes             # Check for changes and update display
 done
-
-
-
-
-
-
-
-
-
-
-

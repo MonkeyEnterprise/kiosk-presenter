@@ -8,7 +8,10 @@
 # auditing purposes.
 #
 # Usage:
-# - Run this script to set up the kiosk environment with required dependencies.
+# - Clone the repository to ~/kiosk-presenter as the kiosk user and run
+#   ./setup.sh from there (not with sudo; it calls sudo itself where needed).
+# - migrate.sh sources this file to reuse its install functions; the main
+#   steps only run when the script is executed directly.
 #
 # Author: Lorenzo Pouw 2025
 # Project: https://github.com/MonkeyEnterprise/kiosk-presenter
@@ -16,6 +19,10 @@
 
 # Ensure the correct path for .bashrc
 BASHRC_FILE="$HOME/.bashrc"
+
+# Repository location. dotfiles/xinitrc expects it at ~/kiosk-presenter.
+REPO_DIR=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
+EXPECTED_REPO_DIR="$HOME/kiosk-presenter"
 
 # =============================================================================
 # Helper Functions
@@ -53,10 +60,20 @@ spinner() {
     echo ""
 }
 
-# Check if the script is run with sudo privileges
-check_sudo() {
-    if [ "$(id -u)" -ne 0 ]; then
-        echo "This script requires sudo privileges. Please run with sudo."
+# Make sure the script runs as the kiosk user, so the dotfiles, crontab and
+# rclone config end up in that user's home instead of root's
+check_not_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        echo "Do not run this script with sudo. Run it as the kiosk user; it asks for sudo when needed."
+        exit 1
+    fi
+}
+
+# Make sure the repository is where dotfiles/xinitrc expects it
+check_repo_location() {
+    if [ "$REPO_DIR" != "$EXPECTED_REPO_DIR" ]; then
+        echo "The repository must be at $EXPECTED_REPO_DIR (it is at $REPO_DIR)."
+        echo "Clone it with: git clone https://github.com/MonkeyEnterprise/kiosk-presenter $EXPECTED_REPO_DIR"
         exit 1
     fi
 }
@@ -82,78 +99,57 @@ install_dependencies() {
     log "All required dependencies are installed."
 }
 
-install_xinitrc() {
-    # Get the current directory of the setup.sh script
-    local script_dir=$(dirname "$(realpath "$0")")
-    
-    # Define the source and destination file paths
-    local source_file="$script_dir/rpi/.xinitrc"
-    local dest_file="$HOME/.xinitrc"
+# Link a dotfile from the repository into the home directory, so a git pull
+# also updates it. An existing file that isn't this link is kept as <file>.bak.
+link_dotfile() {
+    local name="$1"
+    local source_file="$REPO_DIR/dotfiles/$name"
+    local dest_file="$HOME/.$name"
 
-    # Check if the source file exists
-    if [ -f "$source_file" ]; then
-        # Check if the destination file exists
-        if [ -f "$dest_file" ]; then
-            read -p "$dest_file already exists. Do you want to overwrite it? (y/n): " choice
-            if [[ "$choice" != "y" && "$choice" != "Y" ]]; then
-                echo "Skipping .xinitrc installation."
-                return 0
-            fi
-        fi
-
-        # Move the source file to the home directory
-        mv "$source_file" "$dest_file"
-        echo ".xinitrc has been installed."
-    else
-        echo "Source file $source_file does not exist."
+    if [ ! -f "$source_file" ]; then
+        log "Source file $source_file does not exist."
         return 1
     fi
+
+    if [ "$(readlink "$dest_file")" == "$source_file" ]; then
+        log "$dest_file is already linked."
+        return 0
+    fi
+
+    if [ -e "$dest_file" ] || [ -L "$dest_file" ]; then
+        mv "$dest_file" "$dest_file.bak"
+        log "Existing $dest_file moved to $dest_file.bak"
+    fi
+
+    ln -s "$source_file" "$dest_file"
+    log "$dest_file now links to $source_file"
 }
 
-install_bash_profile() {
-    # Get the current directory of the setup.sh script
-    local script_dir=$(dirname "$(realpath "$0")")
-    
-    # Define the source and destination file paths
-    local source_file="$script_dir/rpi/.bash_profile"
-    local dest_file="$HOME/.bash_profile"
-
-    # Check if the source file exists
-    if [ -f "$source_file" ]; then
-        # Check if the destination file exists
-        if [ -f "$dest_file" ]; then
-            read -p "$dest_file already exists. Do you want to overwrite it? (y/n): " choice
-            if [[ "$choice" != "y" && "$choice" != "Y" ]]; then
-                echo "Skipping .bash_profile installation."
-                return 0
-            fi
-        fi
-
-        # Move the source file to the home directory
-        mv "$source_file" "$dest_file"
-        echo ".bash_profile has been installed."
-    else
-        echo "Source file $source_file does not exist."
-        return 1
-    fi
+install_dotfiles() {
+    link_dotfile xinitrc
+    link_dotfile bash_profile
 }
 
 # =============================================================================
 # Install crontab
 # =============================================================================
 
+# Install the display power schedule. Existing cec_client entries (also the
+# old ones pointing to ~/core) are replaced, other cron jobs are kept.
 install_crontab() {
-    crontab -l 2>/dev/null | { 
-        echo "0 6 * * 1-5 $HOME/core/cec-client.sh \"on 0\""
-        echo "0 9 * * 1-5 $HOME/core/cec-client.sh \"standby 0\""
-        echo "30 18 * * 3 $HOME/core/cec-client.sh \"on 0\""
-        echo "0 20 * * 3 $HOME/core/cec-client.sh \"standby 0\""
-        echo "0 9 * * 0 $HOME/core/cec-client.sh \"on 0\""
-        echo "30 13 * * 0 $HOME/core/cec-client.sh \"standby 0\""
-        echo "0 17 * * 0 $HOME/core/cec-client.sh \"on 0\""
-        echo "30 19 * * 0 $HOME/core/cec-client.sh \"standby 0\""
+    local cec="$REPO_DIR/bin/cec_client.sh"
+    crontab -l 2>/dev/null | grep -v 'cec[-_]client\.sh' | {
+        cat
+        echo "0 6 * * 1-5 $cec \"on 0\""
+        echo "0 9 * * 1-5 $cec \"standby 0\""
+        echo "30 18 * * 3 $cec \"on 0\""
+        echo "0 20 * * 3 $cec \"standby 0\""
+        echo "0 9 * * 0 $cec \"on 0\""
+        echo "30 13 * * 0 $cec \"standby 0\""
+        echo "0 17 * * 0 $cec \"on 0\""
+        echo "30 19 * * 0 $cec \"standby 0\""
     } | crontab -
-    echo "Cron jobs have been successfully installed!"
+    log "Cron jobs have been successfully installed!"
 }
 
 # =============================================================================
@@ -395,12 +391,19 @@ rclone_setup_onedrive() {
 # Main Script Execution
 # =============================================================================
 
-check_sudo
-install_dependencies
-install_xinitrc
-install_bash_profile
-install_crontab
-cloudflared_setup
-rclone_setup
+main() {
+    check_not_root
+    check_repo_location
+    install_dependencies
+    install_dotfiles
+    install_crontab
+    cloudflared_setup
+    rclone_setup
 
-echo "Setup Complete!"
+    echo "Setup Complete!"
+}
+
+# Only run when executed directly, not when sourced by migrate.sh
+if [ "${BASH_SOURCE[0]}" == "$0" ]; then
+    main "$@"
+fi

@@ -16,6 +16,12 @@
 # Project: https://github.com/MonkeyEnterprise/kiosk-presenter
 # =============================================================================
 
+# Load ~/.bashrc so RCLONE_REMOTE_PATH (written there by setup.sh) is exported
+# to the X session. Bash does not read ~/.bashrc for login shells by itself.
+if [ -f "$HOME/.bashrc" ]; then
+    . "$HOME/.bashrc"
+fi
+
 # Start X automatically if a graphical session is not already running
 if [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]]; then
     while true; do

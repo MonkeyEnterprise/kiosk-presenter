@@ -26,8 +26,11 @@
 # =============================================================================
 
 # === CONFIG ===
-LOGFILE="/home/kiosk/core/cec_client.log"  # Log file to store all log messages
+LOG_DIR="${KIOSK_LOG_DIR:-$HOME/logs}"   # Log directory (shared with kiosk_client.sh)
+LOGFILE="$LOG_DIR/cec_client.log"       # Log file to store all log messages
 COMMANDS=()               # Array to store all CEC commands passed as arguments
+
+mkdir -p "$LOG_DIR"
 
 # Logging function: prints message with timestamp to logfile
 log() {

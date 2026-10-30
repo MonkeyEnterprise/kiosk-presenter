@@ -19,9 +19,9 @@
 # Environment variables:
 # RCLONE_REMOTE_PATH - Specifies the remote path for syncing media via Rclone.
 #
-# Usage: This file is typically executed when X starts up, usually from the
-#        `~/.xinitrc` or a similar initialization file. This ensures the kiosk
-#        media sync and display script runs immediately upon starting the X session.
+# Usage: setup.sh links ~/.xinitrc to this file, so it runs when X starts.
+#        This ensures the kiosk media sync and display script runs
+#        immediately upon starting the X session.
 #
 # Author: Lorenzo Pouw (2025)
 # Project: https://github.com/MonkeyEnterprise/kiosk-presenter
@@ -37,4 +37,5 @@ xset s noblank    # Disable screen blanking (prevents the screen from turning bl
 # Start the kiosk media script which handles media sync and displays the slideshow.
 # The 'exec' command replaces the current shell with the kiosk media script.
 
-exec /home/kiosk/core/kiosk_client.sh --remote_path $RCLONE_REMOTE_PATH
+# setup.sh requires the repository to be cloned to ~/kiosk-presenter.
+exec "$HOME/kiosk-presenter/bin/kiosk_client.sh" --remote_path "$RCLONE_REMOTE_PATH"

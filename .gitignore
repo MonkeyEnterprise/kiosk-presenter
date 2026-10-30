@@ -1,0 +1,5 @@
+# Logs and hash cache from running the scripts locally
+*.log
+.cache
+
+.DS_Store
