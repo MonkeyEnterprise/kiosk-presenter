@@ -44,6 +44,17 @@ bash -c "source $REPO/setup.sh && install_crontab" > /dev/null
 check '[ "$(crontab -l | grep -c "tv-power")" -eq 1 ] && crontab -l | grep -qxF "0 7 * * 1 $REPO/bin/tv-power on >/dev/null 2>&1"' "~/tv-power.cron is used instead of the default"
 rm "$HOME/tv-power.cron"
 
+echo "== setup-update replaces the old cloudflared update job"
+# Root's crontab as found on kiosk1
+printf '%s\n' '0 4 * * * /usr/local/bin/cloudflared update >> /var/log/cloudflared-update.log 2>&1; [ $? -eq 11 ] && systemctl restart cloudflared' \
+    '0 5 * * * /usr/bin/true' | sudo crontab -
+"$REPO/setup.sh" setup-update > /dev/null 2>&1
+"$REPO/setup.sh" setup-update > /dev/null 2>&1
+check '! sudo crontab -l | grep -qF "/usr/local/bin/cloudflared update"' "old update job removed"
+check '[ "$(sudo crontab -l | grep -c "cloudflared-auto-update")" -eq 1 ]' "one cloudflared-auto-update job, also after two runs"
+check 'sudo crontab -l | grep -qF "/usr/bin/true"' "unrelated root cron job kept"
+check '[ "$(stat -c %U /usr/local/bin/cloudflared-auto-update)" == "root" ]' "update script installed, owned by root"
+
 echo "== Sourcing has no side effects"
 bash -c "source $REPO/setup.sh" > /tmp/out 2>&1; rc=$?
 check '[ $rc -eq 0 ] && [ ! -s /tmp/out ]' "sourcing setup.sh prints and runs nothing"

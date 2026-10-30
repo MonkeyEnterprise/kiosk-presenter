@@ -324,8 +324,9 @@ setup_cloudflared_update() {
     # One updater is enough: the cloudflared-update.timer from 'service install' is replaced by the cron job
     sudo systemctl disable --now cloudflared-update.timer 2>/dev/null || true
 
-    # Replace any existing entry, then update every night at 04:00
-    (sudo crontab -l 2>/dev/null | grep -v "$update_script" || true
+    # Replace any existing entry, also the plain 'cloudflared update' job of
+    # older installs (no rollback), then update every night at 04:00
+    (sudo crontab -l 2>/dev/null | grep -v -e "$update_script" -e "/usr/local/bin/cloudflared update" || true
      echo "0 4 * * * $update_script") | sudo crontab -
 
     echo "cloudflared is updated nightly at 04:00 (log: $log_file)."
