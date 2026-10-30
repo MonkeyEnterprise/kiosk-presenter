@@ -83,10 +83,13 @@ bootstrap_repo() {
 # Install Dependencies
 # =============================================================================
 
+# Non-interactive, so apt doesn't stop to ask e.g. for a keyboard layout.
+# cron is listed because minimal Debian images don't include it.
 install_dependencies() {
     log "Installing necessary packages..."
-    sudo apt update && sudo apt full-upgrade -y
-    sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils jq git
+    sudo apt update
+    sudo env DEBIAN_FRONTEND=noninteractive apt full-upgrade -y
+    sudo env DEBIAN_FRONTEND=noninteractive apt install -y xorg x11-xserver-utils feh rclone cec-utils jq git cron
 }
 
 # =============================================================================
@@ -211,8 +214,10 @@ prompt_cloudflared_setup() {
             echo "Failed to download cloudflared."
             return 1
         fi
-        sudo mv cloudflared /usr/local/bin/
-        sudo chmod +x /usr/local/bin/cloudflared
+        # Owned by root: root runs it (service and nightly update), so the kiosk
+        # user must not be able to replace it
+        sudo install -m 755 -o root -g root cloudflared /usr/local/bin/cloudflared
+        rm -f cloudflared
 
         # Verify install
         if ! cloudflared --version > /dev/null 2>&1; then
