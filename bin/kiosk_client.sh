@@ -41,11 +41,12 @@
 # Paths can be overridden with environment variables (used by the tests).
 REPO_DIR=$(dirname "$(dirname "$(realpath "$0")")")
 DIR="${KIOSK_MEDIA_DIR:-$HOME/media}"           # Media directory
-LOG_DIR="${KIOSK_LOG_DIR:-$HOME/logs}"          # Logs and hash cache
+LOG_DIR="${KIOSK_LOG_DIR:-/var/log/kiosk-presenter}"         # Logs (created by setup.sh)
+STATE_DIR="${KIOSK_STATE_DIR:-$HOME/.cache/kiosk-presenter}"  # Hash cache and placeholder
 LOG="$LOG_DIR/kiosk_client.log"                 # Log file
-CACHE="$LOG_DIR/.cache"                         # Cache file for hash
+CACHE="$STATE_DIR/media.sha256"                 # Hash of the media directory
 PLACEHOLDER_SVG="$REPO_DIR/assets/no-image.svg" # Shown while the media directory is empty
-PLACEHOLDER="$LOG_DIR/placeholder.svg"          # The placeholder, sized for this screen
+PLACEHOLDER="$STATE_DIR/placeholder.svg"        # The placeholder, sized for this screen
 REMOTE="kiosk-dropbox:/"                        # Default remote path
 TIMER="${KIOSK_SYNC_INTERVAL:-300}"             # Sync interval (seconds)
 
@@ -190,8 +191,17 @@ check_changes() {
 
 # === MAIN LOOP ===
 
-# Create media and log directories if they don't exist
-mkdir -p "$DIR" "$LOG_DIR"
+# Create the media and state directories if they don't exist
+mkdir -p "$DIR" "$STATE_DIR"
+
+# setup.sh and migrate.sh create the log directory; until one of them has run
+# (e.g. right after a git pull), log to ~/logs instead of losing the logs
+if ! mkdir -p "$LOG_DIR" 2> /dev/null || [ ! -w "$LOG_DIR" ]; then
+    LOG_DIR="$HOME/logs"
+    LOG="$LOG_DIR/kiosk_client.log"
+    mkdir -p "$LOG_DIR"
+    log "Log directory not writable, logging to $LOG_DIR. Run migrate.sh to fix."
+fi
 
 # Check if required programs are installed
 check_rclone

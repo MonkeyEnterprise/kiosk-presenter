@@ -25,7 +25,8 @@
 #   --as        Only make the Pi the active source
 #
 # Environment:
-#   KIOSK_LOG_DIR       Log directory (default ~/logs)
+#   KIOSK_LOG_DIR       Log directory (default /var/log/kiosk-presenter, or
+#                       ~/logs while that doesn't exist)
 #   KIOSK_CEC_DEVICES   CEC devices to try, as a glob (default /dev/cec*)
 #   KIOSK_CEC_AS_DELAY  Seconds between 'on' and 'as' for --on, so the TV has
 #                       time to wake up (default 5)
@@ -35,12 +36,16 @@
 # =============================================================================
 
 # === CONFIG ===
-LOG_DIR="${KIOSK_LOG_DIR:-$HOME/logs}"          # Log directory (shared with kiosk_client.sh)
-LOGFILE="$LOG_DIR/cec_client.log"               # Log file to store all log messages
+LOG_DIR="${KIOSK_LOG_DIR:-/var/log/kiosk-presenter}"  # Log directory (shared with kiosk_client.sh)
 DEVICES="${KIOSK_CEC_DEVICES:-/dev/cec*}"       # CEC adapters to try
 AS_DELAY="${KIOSK_CEC_AS_DELAY:-5}"             # Wait between 'on' and 'as'
 
-mkdir -p "$LOG_DIR"
+# setup.sh and migrate.sh create the log directory; until then, use ~/logs
+if ! mkdir -p "$LOG_DIR" 2> /dev/null || [ ! -w "$LOG_DIR" ]; then
+  LOG_DIR="$HOME/logs"
+  mkdir -p "$LOG_DIR"
+fi
+LOGFILE="$LOG_DIR/cec_client.log"               # Log file to store all log messages
 
 # Logging function: prints message with timestamp to logfile
 log() {

@@ -4,7 +4,7 @@
 # TV Power Script
 # -----------------------------------------------------------------------------
 # Turns the TV on or off over HDMI-CEC through cec_client.sh, which tries
-# every CEC adapter and logs to ~/logs/cec_client.log. setup.sh links
+# every CEC adapter and logs to /var/log/kiosk-presenter/cec_client.log. setup.sh links
 # /usr/local/bin/tv-power to this file, and the cron jobs from
 # config/tv-power.cron call it.
 #

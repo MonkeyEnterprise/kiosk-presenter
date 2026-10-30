@@ -19,6 +19,7 @@ IMG="/repo/test/fixtures/image.png" # Any image will do as test media
 
 export KIOSK_MEDIA_DIR="/home/kiosk/media"
 export KIOSK_LOG_DIR="/home/kiosk/logs"
+export KIOSK_STATE_DIR="/home/kiosk/state"
 export KIOSK_SYNC_INTERVAL=2
 MEDIA="$KIOSK_MEDIA_DIR"
 LOG="$KIOSK_LOG_DIR/kiosk_client.log"
@@ -35,7 +36,7 @@ reset_kiosk() {
     pkill -f kiosk_client.sh
     pkill -x feh
     sleep 0.5
-    rm -rf "$MEDIA" "$KIOSK_LOG_DIR" "$REMOTE"
+    rm -rf "$MEDIA" "$KIOSK_LOG_DIR" "$KIOSK_STATE_DIR" "$REMOTE"
     mkdir -p "$REMOTE"
 }
 
@@ -55,8 +56,17 @@ check '[ -s "$LOG" ]' "script gets past argument parsing"
 check 'grep -q "Configured remote path: kiosk-dropbox:/" "$LOG"' "falls back to the default remote"
 check 'kill -0 $PID 2> /dev/null' "script keeps running after a failed sync"
 check '[[ "$(feh_args)" == *placeholder.svg* ]]' "feh shows the placeholder"
-check 'grep -q "width=\"1280\" height=\"720\"" "$KIOSK_LOG_DIR/placeholder.svg"' "placeholder sized for the 1280x720 screen"
-check 'grep -qF "$(hostname) · " "$KIOSK_LOG_DIR/placeholder.svg" && ! grep -q "__DEVICE__" "$KIOSK_LOG_DIR/placeholder.svg"' "placeholder shows the hostname and IP address"
+check 'grep -q "width=\"1280\" height=\"720\"" "$KIOSK_STATE_DIR/placeholder.svg"' "placeholder sized for the 1280x720 screen"
+check 'grep -qF "$(hostname) · " "$KIOSK_STATE_DIR/placeholder.svg" && ! grep -q "__DEVICE__" "$KIOSK_STATE_DIR/placeholder.svg"' "placeholder shows the hostname and IP address"
+
+echo "== Default log directory not created yet"
+reset_kiosk
+rm -rf "$HOME/logs"
+env -u KIOSK_LOG_DIR "$CLIENT" --remote_path "$REMOTE" 2> /dev/null &
+PID=$!; sleep 3
+check '[ ! -e /var/log/kiosk-presenter ] && grep -q "logging to $HOME/logs" "$HOME/logs/kiosk_client.log"' "falls back to ~/logs and says so"
+check 'kill -0 $PID 2> /dev/null' "script keeps running"
+rm -rf "$HOME/logs"
 
 echo "== --remote_path with an empty value (empty RCLONE_REMOTE_PATH in xinitrc)"
 reset_kiosk

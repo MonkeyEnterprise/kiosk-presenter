@@ -77,8 +77,8 @@ BACKUP=$(backup_dirs)
 check '[ "$(echo "$BACKUP" | wc -l)" -eq 1 ] && [ -d "$BACKUP" ]' "creates one backup directory"
 
 check '[ -f "$HOME/media/poster.png" ] && [ ! -e "$HOME/feh" ]' "media moved from ~/feh to ~/media"
-check 'grep -q "old kiosk log line" "$HOME/logs/kiosk_client.log"' "kiosk_client.log moved to ~/logs"
-check 'grep -q "old cec log line" "$HOME/logs/cec_client.log"' "cec_client.log moved to ~/logs"
+check 'grep -q "old kiosk log line" /var/log/kiosk-presenter/kiosk_client.log' "kiosk_client.log moved to /var/log/kiosk-presenter"
+check 'grep -q "old cec log line" /var/log/kiosk-presenter/cec_client.log' "cec_client.log moved to /var/log/kiosk-presenter"
 check '[ ! -e "$HOME/core" ] && [ -f "$BACKUP/core/kiosk_client.sh" ]' "~/core moved to the backup"
 check '[ ! -e "$BACKUP/core/.cache" ]' "hash cache dropped"
 
@@ -109,7 +109,7 @@ check '[ -f "$HOME/media/poster.png" ]' "media untouched"
 
 echo "== Scripts work from the new layout"
 tv-power off > /dev/null 2>&1
-check 'grep -q "Starting CEC command execution: --standby" "$HOME/logs/cec_client.log"' "tv-power off reaches cec_client.sh, which logs to ~/logs"
+check 'grep -q "Starting CEC command execution: --standby" /var/log/kiosk-presenter/cec_client.log' "tv-power off reaches cec_client.sh, which logs to /var/log/kiosk-presenter"
 check '[ -x "$REPO/bin/kiosk_client.sh" ] && [ -x "$TV_POWER" ]' "scripts are executable"
 
 finish
