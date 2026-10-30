@@ -1,0 +1,17 @@
+#!/bin/bash
+# Installed as /usr/local/bin/tv-power by kiosk-presenter setup.sh
+# Some TVs (e.g. TCL) only switch on when the Pi also claims active source
+case "$1" in
+    on)
+        echo 'on 0' | cec-client -s -d 1
+        sleep 5
+        echo 'as' | cec-client -s -d 1
+        ;;
+    off)
+        echo 'standby 0' | cec-client -s -d 1
+        ;;
+    *)
+        echo "Usage: tv-power on|off"
+        exit 1
+        ;;
+esac

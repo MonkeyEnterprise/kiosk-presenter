@@ -1,0 +1,31 @@
+#!/bin/sh
+# Installed as /usr/local/bin/cloudflared-auto-update by kiosk-presenter setup.sh:
+# updates cloudflared and rolls back to the previous binary when the tunnel
+# service does not come back.
+BIN=/usr/local/bin/cloudflared
+LOG=/var/log/cloudflared-update.log
+
+echo "$(date): checking for cloudflared update ($($BIN --version 2>&1 | head -n 1))" >> "$LOG"
+cp "$BIN" "$BIN.bak"
+
+"$BIN" update >> "$LOG" 2>&1
+code=$?
+
+# Exit code 11 means a new version was installed
+if [ "$code" -ne 11 ]; then
+    rm -f "$BIN.bak"
+    exit 0
+fi
+
+echo "$(date): updated to $($BIN --version 2>&1 | head -n 1), restarting tunnel" >> "$LOG"
+systemctl restart cloudflared
+sleep 30
+
+if systemctl is-active --quiet cloudflared; then
+    echo "$(date): tunnel running after update" >> "$LOG"
+    rm -f "$BIN.bak"
+else
+    echo "$(date): tunnel not running after update, restoring previous version" >> "$LOG"
+    mv "$BIN.bak" "$BIN"
+    systemctl restart cloudflared
+fi
