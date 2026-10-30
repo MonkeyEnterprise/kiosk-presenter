@@ -101,7 +101,7 @@ To change the folder later, edit that line and reboot.
 
 ## Display power schedule
 
-The schedule is in `config/tv-power.cron`. After changing it, install it again with:
+The default schedule is in `config/tv-power.cron`. A kiosk with a schedule of its own keeps it in `~/tv-power.cron` (same format), which is then used instead; `migrate.sh` creates it from the kiosk's old cron jobs. After changing either file, install it again with:
 
 ```bash
 bash -c 'source ~/kiosk-presenter/setup.sh && install_crontab'
@@ -208,7 +208,9 @@ Then migrate and reboot:
 sudo reboot
 ```
 
-`migrate.sh` moves `REMOTE_PATH` from an old `~/.xinitrc` to `~/.bashrc`, moves the media and logs, links the dotfiles and `tv-power`, and replaces the display power cron jobs. Everything it replaces is kept in `~/kiosk-backup-<date>`. Running it again changes nothing. Cloudflared is left alone.
+`migrate.sh` moves the remote from an old `~/.xinitrc` (`REMOTE_PATH="..."` or `--remote_path "..."`) to `~/.bashrc`, moves the media and logs, links the dotfiles and `tv-power`, and replaces the display power cron jobs. The kiosk keeps its own schedule: the times of its old jobs go to `~/tv-power.cron`.
+
+After migrating, check that the kiosk syncs the right folder: `grep RCLONE_REMOTE_PATH ~/.bashrc`. Without it, the kiosk syncs the root of the default remote. Everything it replaces is kept in `~/kiosk-backup-<date>`. Running it again changes nothing. Cloudflared is left alone.
 
 ---
 
