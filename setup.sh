@@ -3,13 +3,15 @@
 # =============================================================================
 # Kiosk Media Sync & Display Setup
 # -----------------------------------------------------------------------------
-# This script installs necessary dependencies for kiosk setup, including Xorg,
-# feh, rclone, and CEC utilities. It also logs the process for debugging and 
-# auditing purposes.
+# Installs the kiosk: packages, dotfiles, the TV power schedule, an optional
+# Cloudflare Tunnel and the rclone remote. Also manages the tunnel afterwards
+# (see ./setup.sh help).
 #
 # Usage:
-# - Clone the repository to ~/kiosk-presenter as the kiosk user and run
-#   ./setup.sh from there (not with sudo; it calls sudo itself where needed).
+# - Run as the kiosk user, not with sudo; it calls sudo itself where needed.
+# - From a clone in ~/kiosk-presenter:  ./setup.sh [command]
+# - Downloaded on its own (wget), it clones the repository to
+#   ~/kiosk-presenter first and continues from there.
 # - migrate.sh sources this file to reuse its install functions; the main
 #   steps only run when the script is executed directly.
 #
@@ -21,6 +23,7 @@
 BASHRC_FILE="$HOME/.bashrc"
 
 # Repository location. dotfiles/xinitrc expects it at ~/kiosk-presenter.
+REPO_URL="https://github.com/MonkeyEnterprise/kiosk-presenter.git"
 REPO_DIR=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
 EXPECTED_REPO_DIR="$HOME/kiosk-presenter"
 
@@ -33,31 +36,6 @@ log() {
     local msg="$1"
     local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
     echo "$timestamp - $msg"
-}
-
-# Check and install a package if it's not installed
-install_package_if_missing() {
-    local package_name="$1"
-    if ! dpkg -l | grep -q "$package_name"; then
-        log "Installing $package_name..."
-        sudo apt install -y "$package_name"
-    else
-        log "$package_name is already installed."
-    fi
-}
-
-# Simple spinner function for long-running tasks
-spinner() {
-    local pid=$1
-    local delay=0.1
-    local spinstr='|/-\\'
-    local i=0
-    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
-        i=$(( (i+1) %4 ))
-        printf "\r${spinstr:$i:1}"
-        sleep $delay
-    done
-    echo ""
 }
 
 # Make sure the script runs as the kiosk user, so the dotfiles, crontab and
@@ -73,9 +51,32 @@ check_not_root() {
 check_repo_location() {
     if [ "$REPO_DIR" != "$EXPECTED_REPO_DIR" ]; then
         echo "The repository must be at $EXPECTED_REPO_DIR (it is at $REPO_DIR)."
-        echo "Clone it with: git clone https://github.com/MonkeyEnterprise/kiosk-presenter $EXPECTED_REPO_DIR"
+        echo "Clone it with: git clone $REPO_URL $EXPECTED_REPO_DIR"
         exit 1
     fi
+}
+
+# When setup.sh was downloaded on its own, clone the repository (or update an
+# existing clone) and continue with the setup.sh in there
+bootstrap_repo() {
+    if [ -f "$REPO_DIR/bin/kiosk_client.sh" ]; then
+        return 0
+    fi
+
+    if ! command -v git > /dev/null; then
+        log "Installing git..."
+        sudo apt update && sudo apt install -y git
+    fi
+
+    if [ -d "$EXPECTED_REPO_DIR/.git" ]; then
+        log "Updating $EXPECTED_REPO_DIR..."
+        git -C "$EXPECTED_REPO_DIR" pull --ff-only
+    else
+        log "Cloning $REPO_URL to $EXPECTED_REPO_DIR..."
+        git clone "$REPO_URL" "$EXPECTED_REPO_DIR"
+    fi
+
+    exec "$EXPECTED_REPO_DIR/setup.sh" "$@"
 }
 
 # =============================================================================
@@ -83,21 +84,14 @@ check_repo_location() {
 # =============================================================================
 
 install_dependencies() {
-    log "Starting installation of dependencies..."
-
-    # Optionally update the system
-    log "Updating system..."
-    sudo apt update && sudo apt -y full-upgrade
-
-    # List of packages to install
-    local packages=("xorg" "x11-xserver-utils" "feh" "rclone" "cec-utils" "jq")
-
-    for package in "${packages[@]}"; do
-        install_package_if_missing "$package"
-    done
-
-    log "All required dependencies are installed."
+    log "Installing necessary packages..."
+    sudo apt update && sudo apt full-upgrade -y
+    sudo apt install -y xorg x11-xserver-utils feh rclone cec-utils jq git
 }
+
+# =============================================================================
+# Dotfiles and TV power
+# =============================================================================
 
 # Link a dotfile from the repository into the home directory, so a git pull
 # also updates it. An existing file that isn't this link is kept as <file>.bak.
@@ -130,277 +124,448 @@ install_dotfiles() {
     link_dotfile bash_profile
 }
 
-# =============================================================================
-# Install crontab
-# =============================================================================
+# Make 'tv-power on|off' available on the command line
+install_tv_power() {
+    sudo ln -sfn "$REPO_DIR/bin/tv-power" /usr/local/bin/tv-power
+    log "/usr/local/bin/tv-power now links to $REPO_DIR/bin/tv-power"
+}
 
-# Install the display power schedule. Existing cec_client entries (also the
-# old ones pointing to ~/core) are replaced, other cron jobs are kept.
+# Install the display power schedule from config/tv-power.cron. Existing TV
+# power entries (tv-power, and cec_client.sh from older installs) are
+# replaced, other cron jobs are kept.
 install_crontab() {
-    local cec="$REPO_DIR/bin/cec_client.sh"
-    crontab -l 2>/dev/null | grep -v 'cec[-_]client\.sh' | {
+    crontab -l 2>/dev/null | grep -v -e 'cec[-_]client\.sh' -e 'tv-power' | {
         cat
-        echo "0 6 * * 1-5 $cec \"on 0\""
-        echo "0 9 * * 1-5 $cec \"standby 0\""
-        echo "30 18 * * 3 $cec \"on 0\""
-        echo "0 20 * * 3 $cec \"standby 0\""
-        echo "0 9 * * 0 $cec \"on 0\""
-        echo "30 13 * * 0 $cec \"standby 0\""
-        echo "0 17 * * 0 $cec \"on 0\""
-        echo "30 19 * * 0 $cec \"standby 0\""
+        sed -e '/^#/d' -e "s|__BIN__|$REPO_DIR/bin|g" "$REPO_DIR/config/tv-power.cron"
     } | crontab -
-    log "Cron jobs have been successfully installed!"
-}
-
-# =============================================================================
-# Cloudflared Setup
-# =============================================================================
-
-cloudflared_setup() {
-    # Detect system architecture
-    local arch=$(uname -m)
-    case "$arch" in
-        aarch64|arm64) asset="cloudflared-linux-arm64" ;;
-        x86_64) asset="cloudflared-linux-amd64" ;;
-        *) echo "Unsupported architecture: $arch. Only ARM64 and AMD64 architectures are supported."; return 1 ;;
-    esac
-
-    # Fetch the latest release URL from GitHub
-    local url=$(wget -qO- https://api.github.com/repos/cloudflare/cloudflared/releases/latest | \
-                grep browser_download_url | grep "$asset\"" | cut -d '"' -f 4)
-    if [ -z "$url" ]; then
-        echo "Could not find the download link for cloudflared ($asset)."
-        return 1
-    fi
-
-    # Download and install cloudflared
-    echo "Downloading cloudflared..."
-    wget -O cloudflared "$url" &
-    spinner $!
-    
-    sudo mv cloudflared /usr/local/bin/
-    sudo chmod +x /usr/local/bin/cloudflared
-
-    # Verify cloudflared installation
-    if ! cloudflared --version > /dev/null 2>&1; then
-        echo "cloudflared installation failed."
-        return 1
-    fi
-    echo "cloudflared installed successfully."
-
-    # Login to cloudflared
-    if ! cloudflared tunnel login; then
-        echo "cloudflared login failed."
-        return 1
-    fi
-    echo "cloudflared login successful."
-
-    # Create and configure tunnel
-    create_and_configure_tunnel
-}
-
-create_and_configure_tunnel() {
-    read -p "Enter a name for your tunnel: " tunnel_name
-    cloudflared tunnel create "$tunnel_name"
-
-    local tunnel_id=$(cloudflared tunnel list --output json | jq -r ".[] | select(.name==\"$tunnel_name\") | .id")
-    if [ -z "$tunnel_id" ] || [ "$tunnel_id" == "null" ]; then
-        echo "Failed to retrieve tunnel ID for $tunnel_name"
-        return 1
-    fi
-    echo "cloudflared tunnel '$tunnel_name' created successfully with ID: $tunnel_id."
-
-    read -p "Enter the domain name you want to use for the tunnel (e.g., example.com): " domain_name
-    if ! cloudflared tunnel route dns "$tunnel_id" "$tunnel_name.$domain_name"; then
-        echo "cloudflared tunnel routing failed."
-        return 1
-    fi
-    echo "cloudflared tunnel '$tunnel_name' routed successfully to '$tunnel_name.$domain_name'."
-
-    configure_cloudflared "$tunnel_id" "$tunnel_name" "$domain_name"
-}
-
-configure_cloudflared() {
-    local tunnel_id="$1"
-    local tunnel_name="$2"
-    local domain_name="$3"
-
-    local config_dir="/etc/cloudflared"
-    sudo mkdir -p "$config_dir"
-    local config_file="$config_dir/config.yml"
-    local credentials_file="$config_dir/${tunnel_id}.json"
-
-    if [ -f "$HOME/.cloudflared/${tunnel_id}.json" ]; then
-        sudo cp "$HOME/.cloudflared/${tunnel_id}.json" "$credentials_file"
-    else
-        echo "Credentials file not found in $HOME/.cloudflared/"
-        return 1
-    fi
-
-    if [ -f /etc/cloudflared/config.yml ]; then
-        echo "Removing old /etc/cloudflared/config.yml..."
-        sudo rm /etc/cloudflared/config.yml
-    fi
-
-    cat <<EOF | sudo tee "$config_file" > /dev/null
-tunnel: $tunnel_id
-credentials-file: $credentials_file
-ingress:
-  - hostname: $tunnel_name.$domain_name
-    service: http://localhost:8080
-  - service: http_status:404
-EOF
-
-    sudo cloudflared tunnel run "$tunnel_name"
+    log "TV power schedule installed in crontab."
 }
 
 # =============================================================================
 # Rclone Setup
 # =============================================================================
 
-rclone_setup() {
-    echo "Select the cloud storage service you want to set up:"
-    echo "1. Dropbox"
-    echo "2. Google Drive"
-    echo "3. OneDrive"
-    echo "4. Skip rclone setup"
-    
-    read -p "Enter your choice (1/2/3/4): " choice
-    
-    case "$choice" in
-        1)
-            rclone_setup_dropbox
-            ;;
-        2)
-            rclone_setup_google_drive
-            ;;
-        3)
-            rclone_setup_onedrive
-            ;;
-        4)
-            echo "Skipping rclone setup."
-            ;;
-        *)
-            echo "Invalid choice. Please try again."
-            rclone_setup  # Recursively call the function for a valid choice
-            ;;
-    esac
+# Store the remote path in ~/.bashrc, replacing an earlier one.
+# dotfiles/bash_profile loads it before X starts.
+save_remote_path() {
+    local remote_path="$1"
+    touch "$BASHRC_FILE"
+    sed -i '/^export RCLONE_REMOTE_PATH=/d' "$BASHRC_FILE"
+    echo "export RCLONE_REMOTE_PATH='$remote_path'" >> "$BASHRC_FILE"
+    log "RCLONE_REMOTE_PATH is now set to: $remote_path"
 }
 
-# Setup for Dropbox
-rclone_setup_dropbox() {
-    echo "Setting up rclone for Dropbox..."
-    rclone config create kiosk-dropbox dropbox \
-        client_id "" \
-        client_secret "" \
-        advanced_config "false" \
-        auto_config "false" \
-        config_is_local "true"
+prompt_rclone_setup() {
+    read -p "Do you want to initialize rclone? (y/n) " choice
+    if [[ ! "$choice" =~ ^[Yy]$ ]]; then
+        return 0
+    fi
 
-    echo "Dropbox 'kiosk-dropbox' has been set up."
+    rclone config
 
-    # List directories
-    echo "Listing available directories in Dropbox:"
-    rclone lsd kiosk-dropbox:
+    echo "Configured remotes:"
+    rclone listremotes
+    read -p "Enter the folder to show, as remote:path (e.g., dropbox_kiosk:/Kiosks/Kiosk4): " remote_path
+    if [ -z "$remote_path" ]; then
+        echo "No path entered. Set it later with: export RCLONE_REMOTE_PATH='remote:path' in $BASHRC_FILE"
+        return 0
+    fi
+    save_remote_path "$remote_path"
+}
 
-    # Get directory from user
-    echo "Please select a directory from the list above."
-    read -p "Enter the directory path: " selected_path
-    
-    if [ -z "$selected_path" ]; then
-        echo "No path selected. Exiting setup."
+prompt_reboot() {
+    read -p "Do you want to reboot? (y/n) " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+        log "Rebooting system now..."
+        sudo reboot now
+    else
+        log "Setup complete. Please restart manually when ready."
+    fi
+}
+
+# =============================================================================
+# Cloudflared Setup
+# =============================================================================
+
+prompt_cloudflared_setup() {
+    read -p "Do you want to initialize cloudflared? (y/n) " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+        # Detect architecture
+        arch=$(uname -m)
+        case "$arch" in
+            aarch64|arm64) asset="cloudflared-linux-arm64" ;;
+            x86_64|amd64) asset="cloudflared-linux-amd64" ;;
+            *) echo "Unsupported architecture: $arch"; return 1 ;;
+        esac
+        
+        # Fetch the latest release URL
+        url=$(wget -qO- https://api.github.com/repos/cloudflare/cloudflared/releases/latest | \
+              grep browser_download_url | grep "$asset\"" | cut -d '"' -f 4)
+        if [ -z "$url" ]; then
+            echo "Could not find the download link for cloudflared ($asset)."
+            return 1
+        fi
+
+        # Download and install cloudflared
+        if ! wget -O cloudflared "$url"; then
+            echo "Failed to download cloudflared."
+            return 1
+        fi
+        sudo mv cloudflared /usr/local/bin/
+        sudo chmod +x /usr/local/bin/cloudflared
+
+        # Verify install
+        if ! cloudflared --version > /dev/null 2>&1; then
+            echo "cloudflared installation failed."
+            return 1
+        fi
+        echo "cloudflared installed successfully."
+
+        # Login
+        if ! cloudflared tunnel login; then
+            echo "cloudflared login failed."
+            return 1
+        fi
+        echo "cloudflared login successful."
+
+        # Tunnel creation
+        read -p "Enter a name for your tunnel: " tunnel_name
+        cloudflared tunnel create "$tunnel_name"
+
+        # Retrieve tunnel ID via JSON
+        tunnel_id=$(cloudflared tunnel list --output json | jq -r ".[] | select(.name==\"$tunnel_name\") | .id")
+        if [ -z "$tunnel_id" ] || [ "$tunnel_id" == "null" ]; then
+            echo "Failed to retrieve tunnel ID for $tunnel_name"
+            return 1
+        fi
+
+        echo "cloudflared tunnel '$tunnel_name' created successfully with ID: $tunnel_id."
+
+        # Domain input
+        read -p "Enter the domain name you want to use for the tunnel (e.g., example.com): " domain_name
+
+        # DNS route
+        if ! route_dns "$tunnel_id" "$tunnel_name.$domain_name"; then
+            return 1
+        fi
+
+        # ---- CONFIG in /etc/cloudflared ----
+        config_dir="/etc/cloudflared"
+        sudo mkdir -p "$config_dir"
+        config_file="$config_dir/config.yml"
+        credentials_file="$config_dir/${tunnel_id}.json"
+
+        # Copy credentials file from root’s cloudflared dir
+        if [ -f "$HOME/.cloudflared/${tunnel_id}.json" ]; then
+            sudo cp "$HOME/.cloudflared/${tunnel_id}.json" "$credentials_file"
+        else
+            echo "Credentials file not found in $HOME/.cloudflared/"
+            return 1
+        fi
+
+        # Remove conflicting configs if exist
+        if [ -f /etc/cloudflared/config.yml ]; then
+            echo "Removing old /etc/cloudflared/config.yml..."
+            sudo rm /etc/cloudflared/config.yml
+        fi
+
+        # Write new config.yml from the template
+        local template
+        template="$REPO_DIR/config/cloudflared-config.yml"
+        sed -e "s|__TUNNEL_ID__|$tunnel_id|" \
+            -e "s|__CREDENTIALS_FILE__|$credentials_file|" \
+            -e "s|__HOSTNAME__|$tunnel_name.$domain_name|" \
+            "$template" | sudo tee "$config_file" > /dev/null
+        echo "Generated $config_file for tunnel '$tunnel_name' with domain '$tunnel_name.$domain_name'."
+
+        # Service install
+        if ! sudo cloudflared --config "$config_file" service install; then
+            echo "Failed to install cloudflared service."
+            return 1
+        fi
+        sudo systemctl enable cloudflared --now
+        echo "cloudflared service installed and enabled successfully."
+
+        setup_cloudflared_update
+    fi
+}
+
+# Update cloudflared nightly from root's crontab. If the tunnel does not come
+# back after an update, the previous binary is restored, so the device stays
+# reachable.
+setup_cloudflared_update() {
+    local update_script="/usr/local/bin/cloudflared-auto-update"
+    local log_file="/var/log/cloudflared-update.log"
+
+    echo "=== Setting up nightly cloudflared update in root's crontab ==="
+
+    sudo install -m 755 "$REPO_DIR/bin/cloudflared-auto-update" "$update_script"
+
+    # One updater is enough: the cloudflared-update.timer from 'service install' is replaced by the cron job
+    sudo systemctl disable --now cloudflared-update.timer 2>/dev/null || true
+
+    # Replace any existing entry, then update every night at 04:00
+    (sudo crontab -l 2>/dev/null | grep -v "$update_script" || true
+     echo "0 4 * * * $update_script") | sudo crontab -
+
+    echo "cloudflared is updated nightly at 04:00 (log: $log_file)."
+}
+
+cleanup_cloudflared() {
+    echo "Cleaning up all cloudflared data, services, and configs..."
+
+    # Stop and disable all cloudflared services and timers
+    sudo systemctl stop cloudflared cloudflared-update cloudflared-update.timer 2>/dev/null || true
+    sudo systemctl disable cloudflared cloudflared-update cloudflared-update.timer 2>/dev/null || true
+
+    # Remove systemd service and timer files
+    sudo rm -f /etc/systemd/system/cloudflared.service
+    sudo rm -f /etc/systemd/system/cloudflared-update.service
+    sudo rm -f /etc/systemd/system/cloudflared-update.timer
+
+    # Reload systemd to apply changes
+    sudo systemctl daemon-reload
+    sudo systemctl reset-failed
+
+    # Remove the nightly update job
+    (sudo crontab -l 2>/dev/null | grep -v "cloudflared-auto-update" || true) | sudo crontab -
+    sudo rm -f /usr/local/bin/cloudflared-auto-update
+
+    # Remove cloudflared binary
+    if [ -f /usr/local/bin/cloudflared ]; then
+        echo "Removing cloudflared binary..."
+        sudo rm -f /usr/local/bin/cloudflared
+    fi
+
+    # Remove all cloudflared configuration directories
+    echo "Removing cloudflared configuration directories..."
+    sudo rm -rf /etc/cloudflared
+    sudo rm -rf /root/.cloudflared
+    sudo rm -rf "$HOME/.cloudflared"
+
+    echo "Cleanup complete. System is ready for a fresh cloudflared installation."
+}
+
+# Create the DNS record for a tunnel hostname.
+# 'cloudflared tunnel route dns' only works for the domain chosen during
+# 'cloudflared tunnel login' (the zone in cert.pem). For any other domain it
+# creates a wrong record such as 'pi1.new.com.old.app', so the CNAME has to
+# be added in the Cloudflare dashboard instead.
+route_dns() {
+    local tunnel_id="$1"
+    local hostname="$2"
+
+    read -p "Is the domain of '$hostname' the one you selected during 'cloudflared tunnel login'? (y/n) " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+        if ! cloudflared tunnel route dns "$tunnel_id" "$hostname"; then
+            echo "cloudflared tunnel routing failed."
+            return 1
+        fi
+        echo "Tunnel routed successfully to '$hostname'."
+    else
+        echo
+        echo "Add this DNS record in the Cloudflare dashboard (zone of '$hostname'):"
+        echo "  Type:   CNAME"
+        echo "  Name:   $hostname"
+        echo "  Target: $tunnel_id.cfargotunnel.com"
+        echo "  Proxy:  Proxied (orange cloud)"
+        echo
+        read -p "Press Enter when the record has been added... "
+    fi
+}
+
+# Restart cloudflared with a safety net: if the new config locks you out,
+# the previous config is restored automatically after 5 minutes.
+restart_cloudflared_with_rollback() {
+    local config_file="$1"
+    local backup_file="$2"
+
+    sudo systemctl stop cf-rollback.timer 2>/dev/null || true
+    sudo systemctl reset-failed cf-rollback.service 2>/dev/null || true
+    sudo systemd-run --quiet --unit=cf-rollback --on-active=5min \
+        /bin/sh -c "cp '$backup_file' '$config_file' && systemctl restart cloudflared"
+
+    echo
+    echo "Restarting cloudflared. An SSH session through the tunnel will drop now."
+    echo "The previous config is restored automatically in 5 minutes."
+    echo "After logging in again through the new hostname, keep the change with:"
+    echo "  sudo systemctl stop cf-rollback.timer"
+    echo
+    sudo systemctl restart cloudflared
+}
+
+# Validate the edited config; restore the backup when it is invalid.
+validate_cloudflared_config() {
+    local config_file="$1"
+    local backup_file="$2"
+
+    if ! sudo cloudflared tunnel --config "$config_file" ingress validate; then
+        echo "The new config is invalid, restoring the previous one."
+        sudo cp "$backup_file" "$config_file"
+        return 1
+    fi
+}
+
+read_hostname() {
+    local prompt="$1"
+    read -p "$prompt" hostname
+    if [[ ! "$hostname" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$ ]]; then
+        echo "Invalid hostname: '$hostname'"
+        return 1
+    fi
+}
+
+# Add an extra hostname to the existing tunnel (e.g. when moving to a new
+# domain). The existing hostnames keep working, so you can test the new one
+# before removing the old one.
+add_cloudflared_hostname() {
+    local config_file="/etc/cloudflared/config.yml"
+    local backup_file="$config_file.bak"
+
+    if [ ! -f "$config_file" ]; then
+        echo "$config_file not found. Set up cloudflared first."
         return 1
     fi
 
-    # Update ~/.bashrc with the selected path
-    echo "export RCLONE_REMOTE_PATH='kiosk-dropbox:$selected_path'" >> "$BASHRC_FILE"
-    source "$BASHRC_FILE"
-    export RCLONE_REMOTE_PATH="kiosk-dropbox:$selected_path"
-
-    echo "RCLONE_REMOTE_PATH is now set to: kiosk-dropbox:$selected_path"
-}
-
-# Setup for Google Drive
-rclone_setup_google_drive() {
-    echo "Setting up rclone for Google Drive..."
-    rclone config create kiosk-gdrive drive \
-        client_id "" \
-        client_secret "" \
-        scope "drive" \
-        advanced_config "false" \
-        auto_config "false" \
-        config_is_local "true"
-
-    echo "Google Drive 'kiosk-gdrive' has been set up."
-
-    # List directories
-    echo "Listing available directories in Google Drive:"
-    rclone lsd kiosk-gdrive:
-
-    # Get directory from user
-    echo "Please select a directory from the list above."
-    read -p "Enter the directory path: " selected_path
-    
-    if [ -z "$selected_path" ]; then
-        echo "No path selected. Exiting setup."
+    local tunnel_id
+    tunnel_id=$(sudo sed -n 's/^tunnel: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "$config_file")
+    if [ -z "$tunnel_id" ]; then
+        echo "Could not read the tunnel ID from $config_file."
         return 1
     fi
 
-    # Update ~/.bashrc with the selected path
-    echo "export RCLONE_REMOTE_PATH='kiosk-gdrive:$selected_path'" >> "$BASHRC_FILE"
-    source "$BASHRC_FILE"
-    export RCLONE_REMOTE_PATH="kiosk-gdrive:$selected_path"
+    echo "Current hostnames:"
+    sudo grep 'hostname:' "$config_file" | grep -v '"\*"' | sed 's/^ *- hostname: */  /'
 
-    echo "RCLONE_REMOTE_PATH is now set to: kiosk-gdrive:$selected_path"
-}
-
-# Setup for OneDrive
-rclone_setup_onedrive() {
-    echo "Setting up rclone for OneDrive..."
-    rclone config create kiosk-onedrive onedrive \
-        client_id "" \
-        client_secret "" \
-        advanced_config "false" \
-        auto_config "false" \
-        config_is_local "true"
-
-    echo "OneDrive 'kiosk-onedrive' has been set up."
-
-    # List directories
-    echo "Listing available directories in OneDrive:"
-    rclone lsd kiosk-onedrive:
-
-    # Get directory from user
-    echo "Please select a directory from the list above."
-    read -p "Enter the directory path: " selected_path
-    
-    if [ -z "$selected_path" ]; then
-        echo "No path selected. Exiting setup."
+    if ! sudo grep -qF 'hostname: "*"' "$config_file"; then
+        echo "Catch-all rule (hostname: \"*\") not found in $config_file."
         return 1
     fi
 
-    # Update ~/.bashrc with the selected path
-    echo "export RCLONE_REMOTE_PATH='kiosk-onedrive:$selected_path'" >> "$BASHRC_FILE"
-    source "$BASHRC_FILE"
-    export RCLONE_REMOTE_PATH="kiosk-onedrive:$selected_path"
+    read_hostname "Enter the new hostname (e.g., pi1.example.com): " || return 1
+    if sudo grep -qF "hostname: \"$hostname\"" "$config_file"; then
+        echo "'$hostname' is already in $config_file."
+        return 1
+    fi
 
-    echo "RCLONE_REMOTE_PATH is now set to: kiosk-onedrive:$selected_path"
+    if ! route_dns "$tunnel_id" "$hostname"; then
+        return 1
+    fi
+
+    # Insert the new rule before the catch-all rule
+    sudo cp "$config_file" "$backup_file"
+    sudo awk -v host="$hostname" '
+        /^ *- hostname: "\*"/ && !done {
+            print "  - hostname: \"" host "\""
+            print "    service: ssh://localhost:22"
+            done = 1
+        }
+        { print }
+    ' "$backup_file" | sudo tee "$config_file" > /dev/null
+
+    validate_cloudflared_config "$config_file" "$backup_file" || return 1
+    echo "Added '$hostname' to $config_file."
+    restart_cloudflared_with_rollback "$config_file" "$backup_file"
+}
+
+# Remove a hostname from the tunnel (e.g. the old domain after a move).
+# Remove its DNS record in the Cloudflare dashboard afterwards.
+remove_cloudflared_hostname() {
+    local config_file="/etc/cloudflared/config.yml"
+    local backup_file="$config_file.bak"
+
+    if [ ! -f "$config_file" ]; then
+        echo "$config_file not found."
+        return 1
+    fi
+
+    echo "Current hostnames:"
+    sudo grep 'hostname:' "$config_file" | grep -v '"\*"' | sed 's/^ *- hostname: */  /'
+
+    read_hostname "Enter the hostname to remove: " || return 1
+    if ! sudo grep -qF "hostname: \"$hostname\"" "$config_file"; then
+        echo "'$hostname' is not in $config_file."
+        return 1
+    fi
+    if [ "$(sudo grep 'hostname:' "$config_file" | grep -vc '"\*"')" -le 1 ]; then
+        echo "'$hostname' is the last hostname; removing it would lock you out."
+        return 1
+    fi
+
+    # Drop the hostname line and the service line that follows it
+    sudo cp "$config_file" "$backup_file"
+    sudo awk -v host="$hostname" '
+        skip { skip = 0; next }
+        {
+            line = $0
+            sub(/^ +/, "", line)
+            sub(/ +$/, "", line)
+            if (line == "- hostname: \"" host "\"") { skip = 1; next }
+        }
+        { print }
+    ' "$backup_file" | sudo tee "$config_file" > /dev/null
+
+    validate_cloudflared_config "$config_file" "$backup_file" || return 1
+    echo "Removed '$hostname' from $config_file."
+    echo "Remember to delete its DNS record in the Cloudflare dashboard."
+    restart_cloudflared_with_rollback "$config_file" "$backup_file"
 }
 
 # =============================================================================
 # Main Script Execution
 # =============================================================================
 
+usage() {
+    echo "Usage: $0 [command]"
+    echo
+    echo "Without a command the full kiosk installation runs."
+    echo
+    echo "Commands:"
+    echo "  add-hostname         Add a hostname to the existing cloudflared tunnel"
+    echo "  remove-hostname      Remove a hostname from the cloudflared tunnel"
+    echo "  setup-update         Update cloudflared nightly (root crontab, 04:00)"
+    echo "  cleanup-cloudflared  Remove cloudflared completely (tunnel access is lost!)"
+}
+
 main() {
     check_not_root
+    bootstrap_repo "$@"
     check_repo_location
-    install_dependencies
-    install_dotfiles
-    install_crontab
-    cloudflared_setup
-    rclone_setup
 
-    echo "Setup Complete!"
+    case "${1:-}" in
+        "")
+            set -e
+            install_dependencies
+            install_dotfiles
+            install_tv_power
+            install_crontab
+            prompt_cloudflared_setup
+            prompt_rclone_setup
+            prompt_reboot
+            ;;
+        add-hostname)
+            add_cloudflared_hostname
+            ;;
+        remove-hostname)
+            remove_cloudflared_hostname
+            ;;
+        setup-update)
+            setup_cloudflared_update
+            ;;
+        cleanup-cloudflared)
+            read -p "This removes cloudflared and all tunnel credentials from this device. Continue? (y/n) " choice
+            if [[ "$choice" =~ ^[Yy]$ ]]; then
+                cleanup_cloudflared
+            fi
+            ;;
+        -h|--help|help)
+            usage
+            ;;
+        *)
+            usage
+            exit 1
+            ;;
+    esac
 }
 
 # Only run when executed directly, not when sourced by migrate.sh

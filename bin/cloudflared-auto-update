@@ -1,7 +1,8 @@
 #!/bin/sh
-# Installed as /usr/local/bin/cloudflared-auto-update by kiosk-presenter setup.sh:
-# updates cloudflared and rolls back to the previous binary when the tunnel
-# service does not come back.
+# Updates cloudflared and rolls back to the previous binary when the tunnel
+# service does not come back. setup.sh installs a copy as
+# /usr/local/bin/cloudflared-auto-update; root runs it from cron, so it must
+# not be a link into the kiosk user's home.
 BIN=/usr/local/bin/cloudflared
 LOG=/var/log/cloudflared-update.log
 

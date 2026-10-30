@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# =============================================================================
+# TV Power Script
+# -----------------------------------------------------------------------------
+# Turns the TV on or off over HDMI-CEC through cec_client.sh, which tries
+# every CEC adapter and logs to ~/logs/cec_client.log. setup.sh links
+# /usr/local/bin/tv-power to this file, and the cron jobs from
+# config/tv-power.cron call it.
+#
+# Usage:
+#   tv-power on|off
+#
+# Some TVs (e.g. TCL) only switch on when the Pi also claims active source,
+# so 'on' sends 'as' after the TV has had time to wake up.
+#
+# Author: Lorenzo Pouw 2025
+# Project: https://github.com/MonkeyEnterprise/kiosk-presenter
+# =============================================================================
+
+CEC_CLIENT="$(dirname "$(realpath "$0")")/cec_client.sh"
+
+case "$1" in
+    on)
+        "$CEC_CLIENT" "on 0"
+        sleep 5
+        "$CEC_CLIENT" "as"
+        ;;
+    off)
+        "$CEC_CLIENT" "standby 0"
+        ;;
+    *)
+        echo "Usage: tv-power on|off"
+        exit 1
+        ;;
+esac

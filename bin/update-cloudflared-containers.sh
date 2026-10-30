@@ -2,9 +2,9 @@
 #
 # Updates every Docker container running the cloudflare/cloudflared image.
 #
-#   sudo ./update-cloudflared-containers.sh           update now
-#   sudo ./update-cloudflared-containers.sh install   install as a nightly
-#                                                     root cron job and update now
+#   sudo bin/update-cloudflared-containers.sh           update now
+#   sudo bin/update-cloudflared-containers.sh install   install as a nightly
+#                                                       root cron job and update now
 #
 # Per container: pull the image, and when it changed recreate the container
 # with docker compose. If the tunnel does not reconnect, the previous image is

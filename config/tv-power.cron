@@ -1,0 +1,10 @@
+# Display power schedule, installed in the kiosk user's crontab by setup.sh.
+# __BIN__ is replaced with the repository's bin/ directory.
+0 6 * * 1-5 __BIN__/tv-power on >/dev/null 2>&1
+0 9 * * 1-5 __BIN__/tv-power off >/dev/null 2>&1
+30 18 * * 3 __BIN__/tv-power on >/dev/null 2>&1
+0 20 * * 3 __BIN__/tv-power off >/dev/null 2>&1
+0 9 * * 7 __BIN__/tv-power on >/dev/null 2>&1
+30 13 * * 7 __BIN__/tv-power off >/dev/null 2>&1
+0 17 * * 7 __BIN__/tv-power on >/dev/null 2>&1
+30 19 * * 7 __BIN__/tv-power off >/dev/null 2>&1

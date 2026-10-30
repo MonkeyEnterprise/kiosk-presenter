@@ -1,33 +1,22 @@
 #!/bin/bash
 
 # =============================================================================
-# migrate.sh Tests
+# migrate.sh Tests: core layout
 # -----------------------------------------------------------------------------
-# Builds a kiosk with the old layout (~/core, ~/feh, copied dotfiles, cron jobs
-# pointing to ~/core), runs migrate.sh twice and checks the result. Meant to
-# run inside the container started by test/run.sh, as user kiosk, with the
+# Builds a kiosk with the core layout (~/core, ~/feh, copied dotfiles, cron
+# jobs pointing to ~/core), runs migrate.sh twice and checks the result. Meant
+# to run inside the container started by test/run.sh, as user kiosk, with the
 # repository mounted at /repo.
 #
 # Author: Lorenzo Pouw 2025
 # Project: https://github.com/MonkeyEnterprise/kiosk-presenter
 # =============================================================================
 
+source /repo/test/lib.sh
+
 # === CONFIG ===
 REPO="$HOME/kiosk-presenter"
-CEC="$REPO/bin/cec_client.sh"
-
-PASS=0
-FAIL=0
-
-check() {
-    if eval "$1"; then
-        echo "  PASS: $2"
-        PASS=$((PASS+1))
-    else
-        echo "  FAIL: $2"
-        FAIL=$((FAIL+1))
-    fi
-}
+TV_POWER="$REPO/bin/tv-power"
 
 backup_dirs() {
     ls -d "$HOME"/kiosk-backup-* 2> /dev/null
@@ -82,24 +71,24 @@ check 'grep -q "old xinitrc" "$BACKUP/.xinitrc.bak"' "old .xinitrc in the backup
 check 'grep -q "old bash_profile" "$BACKUP/.bash_profile.bak"' "old .bash_profile in the backup"
 check '[ ! -e "$HOME/.xinitrc.bak" ] && [ ! -e "$HOME/.bash_profile.bak" ]' "no .bak files left in ~"
 
-check '[ "$(crontab -l | grep -cF "$CEC")" -eq 8 ]' "8 cron jobs point to the repository"
-check '! crontab -l | grep -q "/core/"' "no cron jobs point to ~/core"
+check '[ "$(crontab -l | grep -cF "$TV_POWER")" -eq 8 ]' "8 cron jobs call the repository's tv-power"
+check '! crontab -l | grep -q -e "/core/" -e "cec[-_]client"' "no cron jobs call the old scripts"
 check 'crontab -l | grep -qF "/usr/bin/true"' "unrelated cron job kept"
 check 'grep -q "core/cec-client.sh" "$BACKUP/crontab"' "old crontab in the backup"
+check '[ "$(readlink /usr/local/bin/tv-power)" == "$TV_POWER" ]' "/usr/local/bin/tv-power links to the repository"
+check '[ "$(grep -c "^export RCLONE_REMOTE_PATH=" "$HOME/.bashrc")" -eq 1 ] && grep -q "Kiosks/Kiosk4" "$HOME/.bashrc"' "RCLONE_REMOTE_PATH kept"
 
 echo "== Second run on the migrated kiosk"
 sleep 1   # A new backup directory would get a different timestamp
 "$REPO/migrate.sh" > /tmp/out 2>&1; rc=$?
 check '[ $rc -eq 0 ]' "exits successfully"
 check '[ "$(backup_dirs)" == "$BACKUP" ]' "creates no new backup"
-check '[ "$(crontab -l | grep -cF "$CEC")" -eq 8 ]' "cron jobs not duplicated"
+check '[ "$(crontab -l | grep -cF "$TV_POWER")" -eq 8 ]' "cron jobs not duplicated"
 check '[ -f "$HOME/media/poster.png" ]' "media untouched"
 
 echo "== Scripts work from the new layout"
-"$CEC" "on 0" > /dev/null 2>&1
-check 'grep -q "Starting CEC command execution: on 0" "$HOME/logs/cec_client.log"' "cec_client.sh logs to ~/logs"
-check '[ -x "$REPO/bin/kiosk_client.sh" ] && [ -x "$CEC" ]' "scripts are executable"
+tv-power off > /dev/null 2>&1
+check 'grep -q "Starting CEC command execution: standby 0" "$HOME/logs/cec_client.log"' "tv-power off reaches cec_client.sh, which logs to ~/logs"
+check '[ -x "$REPO/bin/kiosk_client.sh" ] && [ -x "$TV_POWER" ]' "scripts are executable"
 
-echo
-echo "== Result: $PASS passed, $FAIL failed"
-[ "$FAIL" -eq 0 ]
+finish

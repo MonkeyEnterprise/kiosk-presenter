@@ -23,18 +23,7 @@ export KIOSK_SYNC_INTERVAL=2
 MEDIA="$KIOSK_MEDIA_DIR"
 LOG="$KIOSK_LOG_DIR/kiosk_client.log"
 
-PASS=0
-FAIL=0
-
-check() {
-    if eval "$1"; then
-        echo "  PASS: $2"
-        PASS=$((PASS+1))
-    else
-        echo "  FAIL: $2"
-        FAIL=$((FAIL+1))
-    fi
-}
+source /repo/test/lib.sh
 
 # Args of the running feh process (empty if feh isn't running)
 feh_args() {
@@ -121,6 +110,4 @@ echo "== Media arrives on a kiosk showing the placeholder"
 cp "$IMG" "$REMOTE/e.png"; sleep 5
 check '[[ "$(feh_args)" == *"$MEDIA" ]]' "feh switches back to the slideshow"
 
-echo
-echo "== Result: $PASS passed, $FAIL failed"
-[ "$FAIL" -eq 0 ]
+finish

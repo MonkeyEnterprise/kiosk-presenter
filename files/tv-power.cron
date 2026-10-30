@@ -1,8 +1,0 @@
-0 6 * * 1-5 /usr/local/bin/tv-power on >/dev/null 2>&1
-0 9 * * 1-5 /usr/local/bin/tv-power off >/dev/null 2>&1
-30 18 * * 3 /usr/local/bin/tv-power on >/dev/null 2>&1
-0 20 * * 3 /usr/local/bin/tv-power off >/dev/null 2>&1
-0 9 * * 7 /usr/local/bin/tv-power on >/dev/null 2>&1
-30 13 * * 7 /usr/local/bin/tv-power off >/dev/null 2>&1
-0 17 * * 7 /usr/local/bin/tv-power on >/dev/null 2>&1
-30 19 * * 7 /usr/local/bin/tv-power off >/dev/null 2>&1
