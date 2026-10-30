@@ -173,7 +173,7 @@ install_crontab() {
     schedule=$(tv_power_schedule)
     crontab -l 2>/dev/null | grep -v -e 'cec[-_]client\.sh' -e 'tv-power' | {
         cat
-        sed -e '/^#/d' -e "s|__BIN__|$REPO_DIR/bin|g" "$schedule"
+        sed -e '/^#/d' -e '/^[[:space:]]*$/d' -e "s|__BIN__|$REPO_DIR/bin|g" "$schedule"
     } | crontab -
     log "TV power schedule from $schedule installed in crontab."
 }
